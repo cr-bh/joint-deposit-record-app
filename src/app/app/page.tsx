@@ -4,13 +4,16 @@ import { ledgerEventFromRow } from "@/lib/domain/ledger-adapter";
 import { summarizeLedger } from "@/lib/domain/ledger-summary";
 import { calculateInvestmentPosition, latestValuation, valuePosition } from "@/lib/domain/investment-calculations";
 import type { Currency } from "@/lib/domain/balance-calculations";
-import { fetchAllPages, readConsistentSnapshot } from "@/lib/server/ledger-snapshot";
+import { fetchAllPages, paginateLedgerRows, parseLedgerPage, readConsistentSnapshot } from "@/lib/server/ledger-snapshot";
 import AppClient, { type InvestmentSnapshot } from "./app-client";
 
 type Row = Record<string, unknown>;
 const LIST_PAGE_SIZE = 100;
 
-export default async function LedgerPage() {
+type SearchParams = Promise<{ tab?: string | string[]; ledgerPage?: string | string[] }>;
+
+export default async function LedgerPage({ searchParams }: { searchParams: SearchParams }) {
+  const query = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -69,18 +72,23 @@ export default async function LedgerPage() {
       return [id, { error: error instanceof Error ? error.message : "投资流水需核对" }];
     }
   })) as Record<string, InvestmentSnapshot>;
+  const ledgerPage = paginateLedgerRows(snapshot.entries, parseLedgerPage(query.ledgerPage), LIST_PAGE_SIZE);
 
   return <AppClient
     household={{ id: householdId, name: household.name, reportingCurrency, ledgerVersion: version }}
     userId={user.id}
     role={membership.role}
-    entries={snapshot.entries.slice(0, LIST_PAGE_SIZE)}
+    entries={ledgerPage.rows}
+    recentEntries={snapshot.entries.slice(0, LIST_PAGE_SIZE)}
     proposals={snapshot.proposals}
     investments={snapshot.investments}
     valuations={[]}
     members={snapshot.members}
     ledgerSummary={ledgerSummary}
     postedEntryCount={events.filter((event) => event.status === "posted").length}
+    initialTab={query.tab === "ledger" ? "流水" : "总览"}
+    ledgerPage={ledgerPage.page}
+    ledgerPageCount={ledgerPage.pageCount}
     investmentSnapshots={investmentSnapshots}
   />;
 }

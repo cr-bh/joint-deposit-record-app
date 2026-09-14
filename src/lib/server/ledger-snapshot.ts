@@ -1,5 +1,20 @@
 export type PageResult<T> = { data: T[] | null; error: { message: string } | null };
 
+export function parseLedgerPage(value: string | string[] | undefined) {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (!candidate || !/^[1-9]\d*$/.test(candidate)) return 1;
+  const page = Number(candidate);
+  return Number.isSafeInteger(page) ? page : 1;
+}
+
+export function paginateLedgerRows<T>(rows: T[], requestedPage: number, pageSize = 100) {
+  if (!Number.isSafeInteger(pageSize) || pageSize <= 0) throw new Error("分页大小无效");
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const page = Math.min(Math.max(1, requestedPage), pageCount);
+  const from = (page - 1) * pageSize;
+  return { rows: rows.slice(from, from + pageSize), page, pageCount };
+}
+
 export async function fetchAllPages<T>(fetchPage: (from: number, to: number) => Promise<PageResult<T>>, pageSize = 500) {
   if (!Number.isSafeInteger(pageSize) || pageSize <= 0) throw new Error("分页大小无效");
   const rows: T[] = [];

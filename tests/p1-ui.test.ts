@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { Dashboard, InvestmentList, NewRecordButton, PayerSelect, RecordModal } from "@/app/app/app-client";
+import { Dashboard, InvestmentList, Ledger, NewRecordButton, PayerSelect, RecordModal } from "@/app/app/app-client";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const row = { id, title: "测试存入", entry_type: "deposit", amount_minor: 10000, currency: "USD", status: "posted", occurred_at: "2026-09-01", created_at: "2026-09-01T00:00:00Z" };
@@ -55,5 +55,13 @@ describe("P1 页面金额回归（服务端组件渲染，非双人E2E）", () =
     expect(investmentHtml).toContain("当前标的：");
     expect(investmentHtml).toContain("投资买入");
     expect(investmentHtml).not.toContain("共同账户消费");
+  });
+
+  it("流水分页显示完整总数和可访问的前后页", () => {
+    const html = renderToStaticMarkup(createElement(Ledger, { entries: [row], currency: "USD", members: [], totalEntries: 205, page: 2, pageCount: 3 }));
+    expect(html).toContain("第 2 / 3 页");
+    expect(html).toContain("本页 1 笔，共 205 笔");
+    expect(html).toContain("ledgerPage=1");
+    expect(html).toContain("ledgerPage=3");
   });
 });

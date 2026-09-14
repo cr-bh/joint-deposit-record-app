@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { fetchAllPages, readConsistentSnapshot } from "@/lib/server/ledger-snapshot";
+import { fetchAllPages, paginateLedgerRows, parseLedgerPage, readConsistentSnapshot } from "@/lib/server/ledger-snapshot";
+
+describe("流水列表分页", () => {
+  it.each([undefined, "", "0", "-1", "1.5", "abc", "9007199254740992"])("非法页码 %s 回到第一页", (value) => {
+    expect(parseLedgerPage(value)).toBe(1);
+  });
+
+  it("按页切分且将超过末页的请求收敛到末页", () => {
+    const rows = Array.from({ length: 205 }, (_, id) => ({ id }));
+    expect(paginateLedgerRows(rows, 2)).toMatchObject({ page: 2, pageCount: 3, rows: rows.slice(100, 200) });
+    expect(paginateLedgerRows(rows, 99)).toMatchObject({ page: 3, pageCount: 3, rows: rows.slice(200) });
+  });
+});
 
 describe("服务端全量账本分页 AC-07", () => {
   it.each([1500, 10_000])("读取 %i 条时不会被单页上限截断", async (size) => {
