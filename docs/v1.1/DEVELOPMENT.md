@@ -65,11 +65,11 @@ P0 基线资料＋PR-01 的第一批领域及页面修复。P0、PR-01、P1 均�
 | TypeScript | `npm run typecheck -- --pretty false --incremental false` 通过；关闭增量缓存是为了避免开发服务同步写入 `.next/dev` 时检查进程不退出 |
 | ESLint | `npm run lint` 通过（0错误/0警告）；本机云盘目录冷启动时曾长时间无输出，停止并发开发编译后复跑正常完成 |
 | 生产构建 | `NEXT_TELEMETRY_DISABLED=1 npm run build -- --webpack` 通过（13/13页面生成，包含 `/preview`）；默认Turbopack因环境端口权限失败，未修改默认构建器 |
-| 持续集成 | 新增 GitHub Actions：Node.js 22 下执行依赖安装、TypeScript、Vitest、ESLint 和 webpack 生产构建；需在推送后由 GitHub runner 首次确认 |
+| 持续集成 | GitHub Actions 使用 `checkout@v7`、`setup-node@v7` 和 Node.js 22，执行依赖安装、TypeScript、Vitest、ESLint 和 webpack 生产构建；首次远端运行 34861186002 已全部通过 |
 | 真实数据库迁移/事务/RLS/并发 | 未执行：未配置数据库；环境无 Supabase CLI、PostgreSQL 或 Docker |
 | 本地只读预览 | `/preview` 四页签已在应用内浏览器逐页检查；审批按钮仅显示只读提示，不写数据 |
 | 双人操作及正式视觉截图 | 未执行：未配置认证测试环境；本地合成预览与组件渲染断言不代替此验收 |
 
-下一批按 PR-02 继续：在隔离 Supabase 中执行迁移、四位价格、邀请和双会话并发验收，并确认远端 CI 首次运行结果。完成后再进入 P2，不跳到全站新增页面。
+下一批按 PR-02 继续：在隔离 Supabase 中执行迁移、四位价格、邀请和双会话并发验收。完成后再进入 P2，不跳到全站新增页面。
 
 构建仍有 Supabase/Next 依赖 Edge Runtime Node API 警告；middleware 文件约定弃用已通过迁移到 proxy 消除。真实认证环境下的运行时验证仍待完成。旧缓存只作为本地临时保留，不纳入版本控制。
