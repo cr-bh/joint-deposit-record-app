@@ -26,6 +26,8 @@ npm run typecheck
 npm run build
 ```
 
+推送或提交 Pull Request 后，GitHub Actions 会在 Node.js 22 上自动执行同一组类型、测试、代码规范和生产构建检查。
+
 组件测试使用静态 React 渲染验证提示和金额；不代替移动端视觉、双人端到端或数据库事务测试。测试汇率为合成算例，不是真实报价。
 
 若当前沙箱禁止 Turbopack 编译时绑定本地端口，可使用 `NEXT_TELEMETRY_DISABLED=1 npm run build -- --webpack` 检查构建；这不修改默认构建配置。
