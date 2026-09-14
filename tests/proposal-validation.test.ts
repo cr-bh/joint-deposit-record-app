@@ -10,19 +10,21 @@ const base = {
 };
 const investmentId = "00000000-0000-4000-8000-000000000003";
 const payerMemberId = "00000000-0000-4000-8000-000000000004";
+const categoryId = "00000000-0000-4000-8000-000000000005";
+const projectId = "00000000-0000-4000-8000-000000000006";
 
 describe("按提案类型校验 AC-02/05/21/76", () => {
   it("共同消费必须有类别且金额为正", () => {
-    expect(proposalSchema.safeParse({ ...base, type: "expense", amountMinor: 100, category: "餐饮" }).success).toBe(true);
+    expect(proposalSchema.safeParse({ ...base, type: "expense", amountMinor: 100, category: "餐饮", categoryId }).success).toBe(true);
     expect(proposalSchema.safeParse({ ...base, type: "expense", amountMinor: 100 }).success).toBe(false);
-    expect(proposalSchema.safeParse({ ...base, type: "expense", amountMinor: 0, category: "餐饮" }).success).toBe(false);
+    expect(proposalSchema.safeParse({ ...base, type: "expense", amountMinor: 0, category: "餐饮", categoryId }).success).toBe(false);
   });
 
   it("个人存入与成员代付必须明确实际付款人", () => {
     expect(proposalSchema.safeParse({ ...base, type: "deposit", amountMinor: 100, payerMemberId }).success).toBe(true);
     expect(proposalSchema.safeParse({ ...base, type: "deposit", amountMinor: 100 }).success).toBe(false);
-    expect(proposalSchema.safeParse({ ...base, type: "reimbursement", amountMinor: 100, category: "餐饮", payerMemberId }).success).toBe(true);
-    expect(proposalSchema.safeParse({ ...base, type: "reimbursement", amountMinor: 100, category: "餐饮" }).success).toBe(false);
+    expect(proposalSchema.safeParse({ ...base, type: "reimbursement", amountMinor: 100, category: "餐饮", categoryId, payerMemberId }).success).toBe(true);
+    expect(proposalSchema.safeParse({ ...base, type: "reimbursement", amountMinor: 100, category: "餐饮", categoryId }).success).toBe(false);
   });
 
   it("买入必须有标的、数量及实际总扣款，参考价可选", () => {
@@ -62,8 +64,16 @@ describe("按提案类型校验 AC-02/05/21/76", () => {
   });
 
   it("允许现金记录明确选择账户和三种原币", () => {
-    expect(proposalSchema.safeParse({ ...base, type: "expense", amountMinor: 100, category: "餐饮", currency: "CNY", accountKind: "brokerage" }).success).toBe(true);
-    expect(proposalSchema.safeParse({ ...base, type: "reimbursement", amountMinor: 100, category: "餐饮", payerMemberId, accountKind: "bank" }).success).toBe(false);
+    expect(proposalSchema.safeParse({ ...base, type: "expense", amountMinor: 100, category: "餐饮", categoryId, currency: "CNY", accountKind: "brokerage" }).success).toBe(true);
+    expect(proposalSchema.safeParse({ ...base, type: "reimbursement", amountMinor: 100, category: "餐饮", categoryId, payerMemberId, accountKind: "bank" }).success).toBe(false);
+  });
+
+  it("消费和代付共享分类及可选事项，禁止把事件类型当分类", () => {
+    const spending = { ...base, type: "expense", amountMinor: 100, category: "餐饮", categoryId, project: "2026 香港旅行", projectId };
+    expect(proposalSchema.safeParse(spending).success).toBe(true);
+    expect(proposalSchema.safeParse({ ...spending, projectId: undefined }).success).toBe(false);
+    expect(proposalSchema.safeParse({ ...spending, category: "代付" }).success).toBe(false);
+    expect(proposalSchema.safeParse({ ...spending, categoryId: undefined }).success).toBe(false);
   });
 
   it("真实换汇保存两侧实际金额并要求不同币种", () => {

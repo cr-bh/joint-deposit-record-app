@@ -6,6 +6,8 @@ import { accountCashBalances, combinedCashBalances } from "@/lib/domain/account-
 import { summarizeLedger } from "@/lib/domain/ledger-summary";
 import { calculateInvestmentPosition, latestValuation, valuePosition } from "@/lib/domain/investment-calculations";
 import { fxRateSnapshotFromRow, isFxSnapshotStale, latestEffectiveFxSnapshot, ratesFromSnapshot } from "@/lib/domain/fx-rates";
+import { spendingDimensionFromRow } from "@/lib/domain/spending-dimensions";
+import { filterLedgerActivity, normalizeLedgerFilters } from "@/lib/domain/ledger-filters";
 import type { Currency } from "@/lib/domain/balance-calculations";
 import { fetchAllPages, paginateLedgerRows, parseLedgerPage, readConsistentSnapshot } from "@/lib/server/ledger-snapshot";
 import AppClient, { type InvestmentSnapshot } from "./app-client";
@@ -13,7 +15,7 @@ import AppClient, { type InvestmentSnapshot } from "./app-client";
 type Row = Record<string, unknown>;
 const LIST_PAGE_SIZE = 100;
 
-type SearchParams = Promise<{ tab?: string | string[]; ledgerPage?: string | string[] }>;
+type SearchParams = Promise<{ tab?: string | string[]; ledgerPage?: string | string[]; account?: string | string[]; currency?: string | string[]; category?: string | string[]; project?: string | string[]; payment?: string | string[] }>;
 
 export default async function LedgerPage({ searchParams }: { searchParams: SearchParams }) {
   const query = await searchParams;
@@ -37,7 +39,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
   };
 
   const { version, snapshot } = await readConsistentSnapshot(readVersion, async () => {
-    const [entries, proposals, investments, valuations, members, accounts, transfers, fxSnapshots] = await Promise.all([
+    const [entries, proposals, investments, valuations, members, accounts, transfers, fxSnapshots, spendingCategories, spendingProjects] = await Promise.all([
       fetchAllPages<Row>(async (from, to) => {
         const result = await supabase.from("ledger_entries").select("*").eq("household_id", householdId).eq("status", "posted").order("occurred_at", { ascending: false }).order("effective_sequence", { ascending: false }).range(from, to);
         return { data: result.data as Row[] | null, error: result.error };
@@ -70,8 +72,16 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
         const result = await supabase.from("fx_rate_snapshots").select("*").eq("household_id", householdId).eq("status", "approved").order("effective_at", { ascending: false }).order("approved_at", { ascending: false }).range(from, to);
         return { data: result.data as Row[] | null, error: result.error };
       }),
+      fetchAllPages<Row>(async (from, to) => {
+        const result = await supabase.from("spending_categories").select("id,name,archived_at,is_system").eq("household_id", householdId).order("created_at").order("id").range(from, to);
+        return { data: result.data as Row[] | null, error: result.error };
+      }),
+      fetchAllPages<Row>(async (from, to) => {
+        const result = await supabase.from("spending_projects").select("id,name,archived_at").eq("household_id", householdId).order("created_at").order("id").range(from, to);
+        return { data: result.data as Row[] | null, error: result.error };
+      }),
     ]);
-    return { entries, proposals, investments, valuations, members, accounts, transfers, fxSnapshots };
+    return { entries, proposals, investments, valuations, members, accounts, transfers, fxSnapshots, spendingCategories, spendingProjects };
   });
 
   const events = snapshot.entries.map(ledgerEventFromRow);
@@ -106,7 +116,11 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
     const rightSequence = BigInt(String(right.effective_sequence));
     return leftSequence < rightSequence ? 1 : leftSequence > rightSequence ? -1 : 0;
   });
-  const ledgerPage = paginateLedgerRows(activity, parseLedgerPage(query.ledgerPage), LIST_PAGE_SIZE);
+  const ledgerFilters = normalizeLedgerFilters(query);
+  const filteredActivity = filterLedgerActivity(activity,ledgerFilters);
+  const ledgerPage = paginateLedgerRows(filteredActivity, parseLedgerPage(query.ledgerPage), LIST_PAGE_SIZE);
+  const spendingCategories = snapshot.spendingCategories.map(spendingDimensionFromRow);
+  const spendingProjects = snapshot.spendingProjects.map(spendingDimensionFromRow);
 
   return <AppClient
     household={{ id: householdId, name: household.name, reportingCurrency, ledgerVersion: version }}
@@ -122,11 +136,15 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
     accountBalances={accountBalances}
     fxSnapshot={currentFxSnapshot ? { ...currentFxSnapshot, stale: isFxSnapshotStale(currentFxSnapshot) } : undefined}
     fxSnapshots={fxSnapshots}
+    spendingCategories={spendingCategories}
+    spendingProjects={spendingProjects}
     ledgerSummary={ledgerSummary}
     postedEntryCount={events.filter((event) => event.status === "posted").length + transfers.filter((transfer) => transfer.status === "posted").length}
     initialTab={query.tab === "ledger" ? "流水" : "总览"}
     ledgerPage={ledgerPage.page}
     ledgerPageCount={ledgerPage.pageCount}
+    ledgerTotalEntries={filteredActivity.length}
+    ledgerFilters={ledgerFilters}
     investmentSnapshots={investmentSnapshots}
   />;
 }

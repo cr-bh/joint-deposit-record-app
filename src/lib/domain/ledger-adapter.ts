@@ -22,7 +22,10 @@ const ledgerRow = z.object({
   quantity_milli: integer.nullish(),
   unit_price_1e4: integer.nullish(),
   unit_price_minor: integer.nullish(),
+  category_id: z.string().uuid().nullish(),
   category: z.string().nullish(),
+  project_id: z.string().uuid().nullish(),
+  project_name: z.string().nullish(),
   title: z.string(),
 });
 
@@ -42,6 +45,10 @@ export function ledgerEventFromRow(input: unknown): LedgerEvent {
     investmentId: row.investment_id ?? undefined,
     quantityMilli: row.quantity_milli ?? undefined,
     unitPriceTenThousandths: row.unit_price_1e4 ?? (row.unit_price_minor == null ? undefined : row.unit_price_minor * 100),
-    category: row.category ?? undefined, title: row.title,
+    categoryId: row.category_id ?? undefined,
+    category: row.category ?? undefined,
+    projectId: row.project_id ?? undefined,
+    project: row.project_name ?? undefined,
+    title: row.title,
   };
 }

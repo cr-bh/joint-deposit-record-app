@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { AccountCashCards, Dashboard, FxRateModal, FxRatePanel, InvestmentList, Ledger, NewRecordButton, PayerSelect, RecordModal } from "@/app/app/app-client";
+import { AccountCashCards, Dashboard, FxRateModal, FxRatePanel, InvestmentList, Ledger, LedgerSettings, NewRecordButton, PayerSelect, RecordModal } from "@/app/app/app-client";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const row = { id, title: "测试存入", entry_type: "deposit", amount_minor: 10000, currency: "USD", status: "posted", occurred_at: "2026-09-01", created_at: "2026-09-01T00:00:00Z" };
@@ -46,13 +46,16 @@ describe("P1 页面金额回归（服务端组件渲染，非双人E2E）", () =
 
   it("账户记录与标的投资操作使用各自的类型范围", () => {
     const investment = { id, name: "测试标的", currency: "USD", opening_quantity_milli: 0, opening_cost_minor: 0 };
-    const common = { household: { id, name: "测试账本", reportingCurrency: "USD" }, investments: [investment], members: [], userId: id, close: () => {}, refresh: () => {}, setMessage: () => {}, readOnly: true };
+    const common = { household: { id, name: "测试账本", reportingCurrency: "USD" }, investments: [investment], members: [], userId: id, spendingCategories: [{ id, name: "购物", isSystem: true }], spendingProjects: [{ id: "00000000-0000-4000-8000-000000000002", name: "2026 香港旅行", isSystem: false }], close: () => {}, refresh: () => {}, setMessage: () => {}, readOnly: true };
     const generalHtml = renderToStaticMarkup(createElement(RecordModal, common));
     const investmentHtml = renderToStaticMarkup(createElement(RecordModal, { ...common, mode: "investment", initialInvestmentId: id }));
     expect(generalHtml).toContain("共同账户消费");
     expect(generalHtml).toContain("银行 / 券商内部划转");
     expect(generalHtml).toContain("实际换汇");
     expect(generalHtml).toContain("入账账户");
+    expect(generalHtml).toContain("消费分类");
+    expect(generalHtml).toContain("购物");
+    expect(generalHtml).toContain("2026 香港旅行");
     expect(generalHtml).not.toContain("投资买入");
     expect(investmentHtml).toContain("测试标的 · 投资操作");
     expect(investmentHtml).toContain("当前标的：");
@@ -106,10 +109,24 @@ describe("P1 页面金额回归（服务端组件渲染，非双人E2E）", () =
   });
 
   it("流水分页显示完整总数和可访问的前后页", () => {
-    const html = renderToStaticMarkup(createElement(Ledger, { entries: [row], currency: "USD", members: [], totalEntries: 205, page: 2, pageCount: 3 }));
+    const html = renderToStaticMarkup(createElement(Ledger, { entries: [{ ...row, category: "餐饮", project_name: "2026 香港旅行" }], currency: "USD", members: [], totalEntries: 205, page: 2, pageCount: 3, filters: { account: "bank", currency: "USD", category: "餐饮", project: "2026 香港旅行", payment: "joint" }, categories: [{ id, name: "餐饮", isSystem: true }], projects: [{ id, name: "2026 香港旅行", isSystem: false }] }));
     expect(html).toContain("第 2 / 3 页");
     expect(html).toContain("本页 1 笔，共 205 笔");
     expect(html).toContain("ledgerPage=1");
     expect(html).toContain("ledgerPage=3");
+    expect(html).toContain("account=bank");
+    expect(html).toContain("category=%E9%A4%90%E9%A5%AE");
+    expect(html).toContain("支付方式");
+    expect(html).toContain("事项：2026 香港旅行");
+  });
+
+  it("账本设置支持共享分类、事项与不改历史的归档", () => {
+    const html = renderToStaticMarkup(createElement(LedgerSettings, { close: () => {}, household: { id, name: "测试账本", reportingCurrency: "USD" }, categories: [{ id, name: "玩乐", isSystem: true }], projects: [{ id: "00000000-0000-4000-8000-000000000002", name: "旧事项", archivedAt: "2026-09-01T00:00:00Z", isSystem: false }], refresh: () => {}, setMessage: () => {}, readOnly: true }));
+    expect(html).toContain("账本设置 · 用途");
+    expect(html).toContain("双方共享");
+    expect(html).toContain("代付和报销属于事件类型");
+    expect(html).toContain("玩乐 · 内置");
+    expect(html).toContain("旧事项");
+    expect(html).toContain("恢复");
   });
 });
