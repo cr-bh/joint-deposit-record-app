@@ -62,4 +62,25 @@ describe("P2 共同银行与共同券商现金", () => {
     expect(combinedCashBalances(balances).USD).toBe(60_000);
     expect(() => cashTransferFromRow({ ...transfer, amount_minor: 1 })).toThrow();
   });
+
+  it("真实换汇按两侧实际金额入账且不伪造等值", () => {
+    const balances = accountCashBalances([], [{
+      id: "fx1",
+      amountMinor: 72_000,
+      currency: "CNY",
+      sourceAccountKind: "bank",
+      destinationAccountKind: "bank",
+      destinationAmountMinor: 9_500,
+      destinationCurrency: "USD",
+      movementType: "currency_exchange",
+      status: posted,
+    }]);
+    expect(balances.bank.CNY).toBe(-72_000);
+    expect(balances.bank.USD).toBe(9_500);
+    expect(balances.brokerage.USD).toBe(0);
+  });
+
+  it("同账户仅允许跨币种换汇，不能伪装为同币种划转", () => {
+    expect(() => accountCashBalances([], [{ id: "bad", amountMinor: 100, currency: "USD", sourceAccountKind: "bank", destinationAccountKind: "bank", destinationAmountMinor: 100, destinationCurrency: "USD", movementType: "same_currency", status: posted }])).toThrow("同币种划转数据无效");
+  });
 });

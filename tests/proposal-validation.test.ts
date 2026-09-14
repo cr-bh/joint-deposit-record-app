@@ -65,4 +65,19 @@ describe("按提案类型校验 AC-02/05/21/76", () => {
     expect(proposalSchema.safeParse({ ...base, type: "expense", amountMinor: 100, category: "餐饮", currency: "CNY", accountKind: "brokerage" }).success).toBe(true);
     expect(proposalSchema.safeParse({ ...base, type: "reimbursement", amountMinor: 100, category: "餐饮", payerMemberId, accountKind: "bank" }).success).toBe(false);
   });
+
+  it("真实换汇保存两侧实际金额并要求不同币种", () => {
+    const exchange = { ...base, type: "currency_exchange", amountMinor: 72_000, currency: "CNY", sourceAccountKind: "bank", destinationAccountKind: "brokerage", destinationAmountMinor: 9_500, destinationCurrency: "USD" };
+    expect(proposalSchema.safeParse(exchange).success).toBe(true);
+    expect(proposalSchema.safeParse({ ...exchange, destinationCurrency: "CNY" }).success).toBe(false);
+    expect(proposalSchema.safeParse({ ...exchange, destinationAmountMinor: 0 }).success).toBe(false);
+  });
+
+  it("汇率更新必须提交完整USD基准快照和有效时间", () => {
+    const update = { ...base, type: "fx_rate_update", amountMinor: 0, effectiveAt: "2026-09-14T12:00:00Z", usdToCny: "7.20000000", usdToHkd: "7.80000000", sourceNote: "双方核对的手动汇率" };
+    expect(proposalSchema.safeParse(update).success).toBe(true);
+    expect(proposalSchema.safeParse({ ...update, usdToCny: "0" }).success).toBe(false);
+    expect(proposalSchema.safeParse({ ...update, usdToHkd: "7.12345678901" }).success).toBe(false);
+    expect(proposalSchema.safeParse({ ...update, effectiveAt: "2026-09-14" }).success).toBe(false);
+  });
 });

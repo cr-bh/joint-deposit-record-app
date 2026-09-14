@@ -5,6 +5,7 @@ import { cashTransferFromRow } from "@/lib/domain/account-adapter";
 import { accountCashBalances, combinedCashBalances } from "@/lib/domain/account-balances";
 import { summarizeLedger } from "@/lib/domain/ledger-summary";
 import { calculateInvestmentPosition, latestValuation, valuePosition } from "@/lib/domain/investment-calculations";
+import { fxRateSnapshotFromRow, isFxSnapshotStale, latestEffectiveFxSnapshot, ratesFromSnapshot } from "@/lib/domain/fx-rates";
 import type { Currency } from "@/lib/domain/balance-calculations";
 import { fetchAllPages, paginateLedgerRows, parseLedgerPage, readConsistentSnapshot } from "@/lib/server/ledger-snapshot";
 import AppClient, { type InvestmentSnapshot } from "./app-client";
@@ -36,7 +37,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
   };
 
   const { version, snapshot } = await readConsistentSnapshot(readVersion, async () => {
-    const [entries, proposals, investments, valuations, members, accounts, transfers] = await Promise.all([
+    const [entries, proposals, investments, valuations, members, accounts, transfers, fxSnapshots] = await Promise.all([
       fetchAllPages<Row>(async (from, to) => {
         const result = await supabase.from("ledger_entries").select("*").eq("household_id", householdId).eq("status", "posted").order("occurred_at", { ascending: false }).order("effective_sequence", { ascending: false }).range(from, to);
         return { data: result.data as Row[] | null, error: result.error };
@@ -65,8 +66,12 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
         const result = await supabase.from("cash_transfers").select("*").eq("household_id", householdId).eq("status", "posted").order("occurred_at", { ascending: false }).order("effective_sequence", { ascending: false }).range(from, to);
         return { data: result.data as Row[] | null, error: result.error };
       }),
+      fetchAllPages<Row>(async (from, to) => {
+        const result = await supabase.from("fx_rate_snapshots").select("*").eq("household_id", householdId).eq("status", "approved").order("effective_at", { ascending: false }).order("approved_at", { ascending: false }).range(from, to);
+        return { data: result.data as Row[] | null, error: result.error };
+      }),
     ]);
-    return { entries, proposals, investments, valuations, members, accounts, transfers };
+    return { entries, proposals, investments, valuations, members, accounts, transfers, fxSnapshots };
   });
 
   const events = snapshot.entries.map(ledgerEventFromRow);
@@ -74,7 +79,10 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
   const accountBalances = accountCashBalances(events, transfers);
   const combinedBalances = combinedCashBalances(accountBalances);
   const reportingCurrency = household.reporting_currency as Currency;
-  const ledgerSummary = summarizeLedger(events, reportingCurrency);
+  const fxSnapshots = snapshot.fxSnapshots.map(fxRateSnapshotFromRow);
+  const currentFxSnapshot = latestEffectiveFxSnapshot(fxSnapshots);
+  const historicalRates = Object.fromEntries(fxSnapshots.map((fxSnapshot) => [fxSnapshot.id, ratesFromSnapshot(fxSnapshot)]));
+  const ledgerSummary = summarizeLedger(events, reportingCurrency, ratesFromSnapshot(currentFxSnapshot), transfers, historicalRates);
   if ((["USD", "CNY", "HKD"] as Currency[]).some((currency) => combinedBalances[currency] !== ledgerSummary.cashByCurrency[currency])) {
     throw new Error("账户现金与共同现金核算不一致，请重试");
   }
@@ -112,6 +120,8 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
     members={snapshot.members}
     accounts={snapshot.accounts}
     accountBalances={accountBalances}
+    fxSnapshot={currentFxSnapshot ? { ...currentFxSnapshot, stale: isFxSnapshotStale(currentFxSnapshot) } : undefined}
+    fxSnapshots={fxSnapshots}
     ledgerSummary={ledgerSummary}
     postedEntryCount={events.filter((event) => event.status === "posted").length + transfers.filter((transfer) => transfer.status === "posted").length}
     initialTab={query.tab === "ledger" ? "流水" : "总览"}

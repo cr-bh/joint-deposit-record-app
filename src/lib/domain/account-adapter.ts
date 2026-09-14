@@ -9,6 +9,9 @@ const cashTransferRow = z.object({
   currency: z.enum(["USD", "CNY", "HKD"]),
   source_account_kind: z.enum(["bank", "brokerage"]),
   destination_account_kind: z.enum(["bank", "brokerage"]),
+  destination_amount_minor: integer.nullish(),
+  destination_currency: z.enum(["USD", "CNY", "HKD"]).nullish(),
+  movement_type: z.enum(["same_currency", "currency_exchange"]).nullish(),
   status: z.enum(["posted", "voided"]),
 });
 
@@ -20,6 +23,9 @@ export function cashTransferFromRow(input: unknown): CashTransfer {
     currency: row.currency,
     sourceAccountKind: row.source_account_kind,
     destinationAccountKind: row.destination_account_kind,
+    destinationAmountMinor: row.destination_amount_minor ?? undefined,
+    destinationCurrency: row.destination_currency ?? undefined,
+    movementType: row.movement_type ?? undefined,
     status: row.status,
   };
 }

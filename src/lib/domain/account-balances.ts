@@ -7,6 +7,9 @@ export type CashTransfer = {
   currency: Currency;
   sourceAccountKind: CashAccountKind;
   destinationAccountKind: CashAccountKind;
+  destinationAmountMinor?: number;
+  destinationCurrency?: Currency;
+  movementType?: "same_currency" | "currency_exchange";
   status: "posted" | "voided";
 };
 
@@ -32,12 +35,17 @@ export function accountCashBalances(events: LedgerEvent[], transfers: CashTransf
   }
   for (const transfer of transfers) {
     if (transfer.status !== "posted") continue;
-    if (transfer.sourceAccountKind === transfer.destinationAccountKind) throw new Error("划转账户不能相同");
     if (!currencies.includes(transfer.currency)) throw new Error("划转币种无效");
     const amount = safeInteger(transfer.amountMinor, "划转金额");
     if (amount <= 0) throw new Error("划转金额必须大于零");
+    const destinationCurrency = transfer.destinationCurrency ?? transfer.currency;
+    const destinationAmount = safeInteger(transfer.destinationAmountMinor ?? amount, "目标到账金额");
+    if (destinationAmount <= 0) throw new Error("目标到账金额必须大于零");
+    const movementType = transfer.movementType ?? (destinationCurrency === transfer.currency ? "same_currency" : "currency_exchange");
+    if (movementType === "same_currency" && (transfer.sourceAccountKind === transfer.destinationAccountKind || destinationCurrency !== transfer.currency || destinationAmount !== amount)) throw new Error("同币种划转数据无效");
+    if (movementType === "currency_exchange" && destinationCurrency === transfer.currency) throw new Error("换汇币种不能相同");
     result[transfer.sourceAccountKind][transfer.currency] = safeInteger(result[transfer.sourceAccountKind][transfer.currency] - amount, "来源账户余额");
-    result[transfer.destinationAccountKind][transfer.currency] = safeInteger(result[transfer.destinationAccountKind][transfer.currency] + amount, "目标账户余额");
+    result[transfer.destinationAccountKind][destinationCurrency] = safeInteger(result[transfer.destinationAccountKind][destinationCurrency] + destinationAmount, "目标账户余额");
   }
   return result;
 }

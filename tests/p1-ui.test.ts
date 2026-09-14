@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { AccountCashCards, Dashboard, InvestmentList, Ledger, NewRecordButton, PayerSelect, RecordModal } from "@/app/app/app-client";
+import { AccountCashCards, Dashboard, FxRateModal, FxRatePanel, InvestmentList, Ledger, NewRecordButton, PayerSelect, RecordModal } from "@/app/app/app-client";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const row = { id, title: "测试存入", entry_type: "deposit", amount_minor: 10000, currency: "USD", status: "posted", occurred_at: "2026-09-01", created_at: "2026-09-01T00:00:00Z" };
@@ -51,6 +51,7 @@ describe("P1 页面金额回归（服务端组件渲染，非双人E2E）", () =
     const investmentHtml = renderToStaticMarkup(createElement(RecordModal, { ...common, mode: "investment", initialInvestmentId: id }));
     expect(generalHtml).toContain("共同账户消费");
     expect(generalHtml).toContain("银行 / 券商内部划转");
+    expect(generalHtml).toContain("实际换汇");
     expect(generalHtml).toContain("入账账户");
     expect(generalHtml).not.toContain("投资买入");
     expect(investmentHtml).toContain("测试标的 · 投资操作");
@@ -73,6 +74,35 @@ describe("P1 页面金额回归（服务端组件渲染，非双人E2E）", () =
     const html = renderToStaticMarkup(createElement(Ledger, { entries: [transfer], currency: "USD", members: [], totalEntries: 1 }));
     expect(html).toContain("账户内部划转");
     expect(html).toContain("共同银行 → 共同券商");
+  });
+
+  it("实际换汇流水同时显示真实扣除和到账金额", () => {
+    const exchange = { id, title: "美元换港币", entry_type: "currency_exchange", movement_type: "currency_exchange", amount_minor: 10_000, currency: "USD", destination_amount_minor: 78_000, destination_currency: "HKD", fx_snapshot_id: id, status: "posted", occurred_at: "2026-09-02", source_account_kind: "bank", destination_account_kind: "bank" };
+    const snapshot = { id, usdToCny: 7.2, usdToHkd: 7.8, effectiveAt: "2026-09-01T00:00:00Z", sourceNote: "人工录入", createdBy: id, approvedBy: id, approvedAt: "2026-09-01T00:00:00Z" };
+    const html = renderToStaticMarkup(createElement(Ledger, { entries: [exchange], currency: "USD", members: [], fxSnapshots: [snapshot], totalEntries: 1 }));
+    expect(html).toContain("实际换汇");
+    expect(html).toContain("实际扣除 $100.00");
+    expect(html).toContain("实际到账 HK$780.00");
+    expect(html).toContain("换汇净额折算差额（可能包含价差及费用）：$0.00");
+  });
+
+  it("汇率面板明确方向、人工来源和过期提示", () => {
+    const snapshot = { id, usdToCny: 7.2, usdToHkd: 7.8, effectiveAt: "2026-09-01T00:00:00Z", sourceNote: "银行 App 人工录入", createdBy: id, approvedBy: id, approvedAt: "2026-09-01T00:00:00Z", stale: true };
+    const html = renderToStaticMarkup(createElement(FxRatePanel, { snapshot, open: () => {} }));
+    expect(html).toContain("手动汇率");
+    expect(html).toContain("1 USD = <b>7.2</b> CNY");
+    expect(html).toContain("1 USD = <b>7.8</b> HKD");
+    expect(html).toContain("已超过24小时，仅提示不禁用");
+  });
+
+  it("汇率提交要求完整快照并说明批准前不生效", () => {
+    const current = { id, usdToCny: 7.2, usdToHkd: 7.8, effectiveAt: "2026-09-01T00:00:00Z", sourceNote: "银行 App 人工录入", createdBy: id, approvedBy: id, approvedAt: "2026-09-01T00:00:00Z", stale: false };
+    const html = renderToStaticMarkup(createElement(FxRateModal, { close: () => {}, household: { id, name: "测试账本", reportingCurrency: "USD" }, current, refresh: () => {}, setMessage: () => {}, readOnly: true }));
+    expect(html).toContain("完整快照");
+    expect(html).toContain("1 USD = 多少 CNY");
+    expect(html).toContain("1 USD = 多少 HKD");
+    expect(html).toContain("批准后才生效");
+    expect(html).toContain("不会获取实时市场行情");
   });
 
   it("流水分页显示完整总数和可访问的前后页", () => {
