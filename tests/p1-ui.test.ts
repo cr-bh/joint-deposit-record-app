@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { Dashboard, InvestmentList, Ledger, NewRecordButton, PayerSelect, RecordModal } from "@/app/app/app-client";
+import { AccountCashCards, Dashboard, InvestmentList, Ledger, NewRecordButton, PayerSelect, RecordModal } from "@/app/app/app-client";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const row = { id, title: "测试存入", entry_type: "deposit", amount_minor: 10000, currency: "USD", status: "posted", occurred_at: "2026-09-01", created_at: "2026-09-01T00:00:00Z" };
@@ -50,11 +50,29 @@ describe("P1 页面金额回归（服务端组件渲染，非双人E2E）", () =
     const generalHtml = renderToStaticMarkup(createElement(RecordModal, common));
     const investmentHtml = renderToStaticMarkup(createElement(RecordModal, { ...common, mode: "investment", initialInvestmentId: id }));
     expect(generalHtml).toContain("共同账户消费");
+    expect(generalHtml).toContain("银行 / 券商内部划转");
+    expect(generalHtml).toContain("入账账户");
     expect(generalHtml).not.toContain("投资买入");
     expect(investmentHtml).toContain("测试标的 · 投资操作");
     expect(investmentHtml).toContain("当前标的：");
     expect(investmentHtml).toContain("投资买入");
+    expect(investmentHtml).toContain("结算账户：共同券商");
     expect(investmentHtml).not.toContain("共同账户消费");
+  });
+
+  it("两类现金账户按原币显示余额并明确标出负数", () => {
+    const html = renderToStaticMarkup(createElement(AccountCashCards, { accounts: [{ kind: "bank", name: "家庭银行" }], balances: { bank: { USD: 40_000, CNY: 0, HKD: 0 }, brokerage: { USD: -18_000, CNY: 7_200, HKD: 0 } } }));
+    expect(html).toContain("家庭银行");
+    expect(html).toContain("共同券商");
+    expect(html).toContain("-$180.00");
+    expect(html).toContain("内部划转只改变资金所在账户");
+  });
+
+  it("划转流水显示方向且不伪装成收支", () => {
+    const transfer = { id, title: "转入券商", entry_type: "account_transfer", amount_minor: 20_000, currency: "USD", status: "posted", occurred_at: "2026-09-02", source_account_kind: "bank", destination_account_kind: "brokerage" };
+    const html = renderToStaticMarkup(createElement(Ledger, { entries: [transfer], currency: "USD", members: [], totalEntries: 1 }));
+    expect(html).toContain("账户内部划转");
+    expect(html).toContain("共同银行 → 共同券商");
   });
 
   it("流水分页显示完整总数和可访问的前后页", () => {

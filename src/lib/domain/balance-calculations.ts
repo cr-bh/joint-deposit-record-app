@@ -1,11 +1,12 @@
 import { calculateInvestmentPosition } from "./investment-calculations";
 import { safeInteger } from "./integer-math";
 export type Currency = "USD" | "CNY" | "HKD";
+export type CashAccountKind = "bank" | "brokerage";
 // Online identifiers are auth.users UUIDs, never a fixed pair of demo names.
 export type MemberId = string;
 export type LedgerEventType = "opening_balance" | "deposit" | "expense" | "expense_refund" | "reimbursement" | "settlement" | "investment_buy" | "investment_sell" | "dividend";
 export type FxRates = Record<Currency, number>;
-export interface LedgerEvent { id: string; type: LedgerEventType; amountMinor: number; currency: Currency; status: "posted" | "voided"; occurredAt: string; createdAt?: string; effectiveSequence?: string; submitterId?: MemberId; payerMemberId?: MemberId; payeeMemberId?: MemberId; memberId?: MemberId; category?: string; title?: string; investmentId?: string; quantityMilli?: number; unitPriceTenThousandths?: number; }
+export interface LedgerEvent { id: string; type: LedgerEventType; amountMinor: number; currency: Currency; status: "posted" | "voided"; occurredAt: string; createdAt?: string; effectiveSequence?: string; submitterId?: MemberId; payerMemberId?: MemberId; payeeMemberId?: MemberId; memberId?: MemberId; category?: string; title?: string; investmentId?: string; quantityMilli?: number; unitPriceTenThousandths?: number; accountKind?: CashAccountKind; }
 export interface ProposalLike { status: string; payload: Pick<LedgerEvent, "type" | "amountMinor" | "currency" | "memberId" | "payerMemberId" | "payeeMemberId">; }
 export type ReimbursementSummary = { memberId: MemberId; paidMinor: number; reimbursedMinor: number; pendingMinor: number; availableMinor: number; currency: Currency };
 

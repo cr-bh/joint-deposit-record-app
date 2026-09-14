@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ledgerEventFromRow } from "@/lib/domain/ledger-adapter";
+import { cashTransferFromRow } from "@/lib/domain/account-adapter";
+import { accountCashBalances, combinedCashBalances } from "@/lib/domain/account-balances";
 import { summarizeLedger } from "@/lib/domain/ledger-summary";
 import { calculateInvestmentPosition, latestValuation, valuePosition } from "@/lib/domain/investment-calculations";
 import type { Currency } from "@/lib/domain/balance-calculations";
@@ -34,7 +36,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
   };
 
   const { version, snapshot } = await readConsistentSnapshot(readVersion, async () => {
-    const [entries, proposals, investments, valuations, members] = await Promise.all([
+    const [entries, proposals, investments, valuations, members, accounts, transfers] = await Promise.all([
       fetchAllPages<Row>(async (from, to) => {
         const result = await supabase.from("ledger_entries").select("*").eq("household_id", householdId).eq("status", "posted").order("occurred_at", { ascending: false }).order("effective_sequence", { ascending: false }).range(from, to);
         return { data: result.data as Row[] | null, error: result.error };
@@ -55,13 +57,27 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
         const result = await supabase.from("household_members").select("user_id, role, profiles(display_name)").eq("household_id", householdId).eq("active", true).order("user_id").range(from, to);
         return { data: result.data as Row[] | null, error: result.error };
       }),
+      fetchAllPages<Row>(async (from, to) => {
+        const result = await supabase.from("cash_accounts").select("household_id, kind, name").eq("household_id", householdId).order("kind").range(from, to);
+        return { data: result.data as Row[] | null, error: result.error };
+      }),
+      fetchAllPages<Row>(async (from, to) => {
+        const result = await supabase.from("cash_transfers").select("*").eq("household_id", householdId).eq("status", "posted").order("occurred_at", { ascending: false }).order("effective_sequence", { ascending: false }).range(from, to);
+        return { data: result.data as Row[] | null, error: result.error };
+      }),
     ]);
-    return { entries, proposals, investments, valuations, members };
+    return { entries, proposals, investments, valuations, members, accounts, transfers };
   });
 
   const events = snapshot.entries.map(ledgerEventFromRow);
+  const transfers = snapshot.transfers.map(cashTransferFromRow);
+  const accountBalances = accountCashBalances(events, transfers);
+  const combinedBalances = combinedCashBalances(accountBalances);
   const reportingCurrency = household.reporting_currency as Currency;
   const ledgerSummary = summarizeLedger(events, reportingCurrency);
+  if ((["USD", "CNY", "HKD"] as Currency[]).some((currency) => combinedBalances[currency] !== ledgerSummary.cashByCurrency[currency])) {
+    throw new Error("账户现金与共同现金核算不一致，请重试");
+  }
   const investmentSnapshots = Object.fromEntries(snapshot.investments.map((investment) => {
     const id = String(investment.id);
     try {
@@ -72,7 +88,17 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
       return [id, { error: error instanceof Error ? error.message : "投资流水需核对" }];
     }
   })) as Record<string, InvestmentSnapshot>;
-  const ledgerPage = paginateLedgerRows(snapshot.entries, parseLedgerPage(query.ledgerPage), LIST_PAGE_SIZE);
+  const activity: Row[] = [
+    ...snapshot.entries,
+    ...snapshot.transfers.map((transfer) => ({ ...transfer, entry_type: "account_transfer" }) as Row),
+  ].sort((left, right) => {
+    const dateOrder = String(right.occurred_at).localeCompare(String(left.occurred_at));
+    if (dateOrder) return dateOrder;
+    const leftSequence = BigInt(String(left.effective_sequence));
+    const rightSequence = BigInt(String(right.effective_sequence));
+    return leftSequence < rightSequence ? 1 : leftSequence > rightSequence ? -1 : 0;
+  });
+  const ledgerPage = paginateLedgerRows(activity, parseLedgerPage(query.ledgerPage), LIST_PAGE_SIZE);
 
   return <AppClient
     household={{ id: householdId, name: household.name, reportingCurrency, ledgerVersion: version }}
@@ -84,8 +110,10 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
     investments={snapshot.investments}
     valuations={[]}
     members={snapshot.members}
+    accounts={snapshot.accounts}
+    accountBalances={accountBalances}
     ledgerSummary={ledgerSummary}
-    postedEntryCount={events.filter((event) => event.status === "posted").length}
+    postedEntryCount={events.filter((event) => event.status === "posted").length + transfers.filter((transfer) => transfer.status === "posted").length}
     initialTab={query.tab === "ledger" ? "流水" : "总览"}
     ledgerPage={ledgerPage.page}
     ledgerPageCount={ledgerPage.pageCount}

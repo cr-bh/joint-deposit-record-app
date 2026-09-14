@@ -53,4 +53,16 @@ describe("按提案类型校验 AC-02/05/21/76", () => {
     expect(proposalSchema.safeParse({ ...base, type: "deposit", amountMinor: 100, payerMemberId, idempotencyKey: "draft-1" }).success).toBe(false);
     expect(proposalSchema.safeParse({ ...base, type: "deposit", amountMinor: 100, payerMemberId, occurredAt: "09/12/2026" }).success).toBe(false);
   });
+
+  it("接受同币种跨账户划转并拒绝同账户划转", () => {
+    const transfer = { ...base, type: "account_transfer", amountMinor: 20_000, sourceAccountKind: "bank", destinationAccountKind: "brokerage" };
+    expect(proposalSchema.safeParse(transfer).success).toBe(true);
+    expect(proposalSchema.safeParse({ ...transfer, destinationAccountKind: "bank" }).success).toBe(false);
+    expect(proposalSchema.safeParse({ ...transfer, sourceAccountKind: "wallet" }).success).toBe(false);
+  });
+
+  it("允许现金记录明确选择账户和三种原币", () => {
+    expect(proposalSchema.safeParse({ ...base, type: "expense", amountMinor: 100, category: "餐饮", currency: "CNY", accountKind: "brokerage" }).success).toBe(true);
+    expect(proposalSchema.safeParse({ ...base, type: "reimbursement", amountMinor: 100, category: "餐饮", payerMemberId, accountKind: "bank" }).success).toBe(false);
+  });
 });
