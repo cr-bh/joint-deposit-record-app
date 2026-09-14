@@ -1,4 +1,5 @@
 -- P1 proposal integrity: stable replay order, typed payload validation, and idempotent decisions.
+alter table public.households add column if not exists ledger_version bigint not null default 0;
 alter table public.ledger_entries add column if not exists effective_sequence bigint;
 alter table public.ledger_entries add column if not exists payer_member_id uuid references public.profiles(id);
 alter table public.ledger_entries add column if not exists payee_member_id uuid references public.profiles(id);
@@ -267,10 +268,48 @@ $$;
 drop function if exists public.set_investment_price_1e4(uuid,date,bigint,text);
 drop function if exists public.set_investment_price(uuid,date,bigint,text);
 
+create or replace function public.bump_household_ledger_version() returns trigger
+language plpgsql security definer set search_path=pg_catalog,public as $$
+declare target_household uuid;
+begin
+  if tg_op = 'DELETE' then
+    target_household := old.household_id;
+  else
+    target_household := new.household_id;
+  end if;
+  update public.households set ledger_version=ledger_version+1 where id=target_household;
+  if tg_op = 'UPDATE' and old.household_id <> new.household_id then
+    update public.households set ledger_version=ledger_version+1 where id=old.household_id;
+  end if;
+  if tg_op = 'DELETE' then
+    return old;
+  else
+    return new;
+  end if;
+end;
+$$;
+
+drop trigger if exists bump_version_on_entry on public.ledger_entries;
+create trigger bump_version_on_entry after insert or update or delete on public.ledger_entries
+for each row execute function public.bump_household_ledger_version();
+drop trigger if exists bump_version_on_proposal on public.proposals;
+create trigger bump_version_on_proposal after insert or update or delete on public.proposals
+for each row execute function public.bump_household_ledger_version();
+drop trigger if exists bump_version_on_investment on public.investments;
+create trigger bump_version_on_investment after insert or update or delete on public.investments
+for each row execute function public.bump_household_ledger_version();
+drop trigger if exists bump_version_on_valuation on public.investment_valuations;
+create trigger bump_version_on_valuation after insert or update or delete on public.investment_valuations
+for each row execute function public.bump_household_ledger_version();
+drop trigger if exists bump_version_on_member on public.household_members;
+create trigger bump_version_on_member after insert or update or delete on public.household_members
+for each row execute function public.bump_household_ledger_version();
+
 revoke all on function public.shares_active_household(uuid) from public;
 revoke all on function public.validate_proposal_payload(uuid,jsonb) from public;
 revoke all on function public.submit_proposal(uuid,jsonb,uuid) from public;
 revoke all on function public.decide_proposal(uuid,boolean,text) from public;
+revoke all on function public.bump_household_ledger_version() from public;
 grant execute on function public.shares_active_household(uuid) to authenticated;
 grant execute on function public.submit_proposal(uuid,jsonb,uuid) to authenticated;
 grant execute on function public.decide_proposal(uuid,boolean,text) to authenticated;

@@ -24,7 +24,7 @@ describe("P1 页面金额回归（服务端组件渲染，非双人E2E）", () =
     expect(html).toContain("当前市值（成本暂估）");
     expect(html).toContain("$100.00");
     expect(html).toContain("待估值");
-    expect(html).toContain("交易历史");
+    expect(html).toContain("最近交易");
     expect(html).toContain("页面顶部“新建账本记录”");
     expect(html).not.toContain("提交交易");
     expect(html).not.toContain("更新最新价格");
