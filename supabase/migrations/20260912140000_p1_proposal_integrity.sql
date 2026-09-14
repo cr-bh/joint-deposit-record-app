@@ -1,4 +1,17 @@
 -- P1 proposal integrity: stable replay order, typed payload validation, and idempotent decisions.
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
+do $$
+begin
+  if exists(
+    select 1 from pg_extension e join pg_namespace n on n.oid=e.extnamespace
+    where e.extname='pgcrypto' and n.nspname <> 'extensions'
+  ) then
+    alter extension pgcrypto set schema extensions;
+  end if;
+end;
+$$;
+
 alter table public.households add column if not exists ledger_version bigint not null default 0;
 alter table public.ledger_entries add column if not exists effective_sequence bigint;
 alter table public.ledger_entries add column if not exists payer_member_id uuid references public.profiles(id);
@@ -305,11 +318,71 @@ drop trigger if exists bump_version_on_member on public.household_members;
 create trigger bump_version_on_member after insert or update or delete on public.household_members
 for each row execute function public.bump_household_ledger_version();
 
+-- Serialize invitation capacity checks on the household row. Different invitation
+-- rows can otherwise both observe one available seat and create a third member.
+create or replace function public.create_invitation(target_household uuid, invited_email_input text) returns text
+language plpgsql security definer set search_path=pg_catalog,public as $$
+declare
+  token text;
+  normalized text := lower(trim(invited_email_input));
+  household_status text;
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  select status into household_status from public.households where id=target_household for update;
+  if household_status is null or not public.is_household_owner(target_household) then raise exception 'owner permission required'; end if;
+  if household_status <> 'active' then raise exception 'household is archived'; end if;
+  if (select count(*) from public.household_members where household_id=target_household and active) >= 2 then raise exception 'household already has two active members'; end if;
+  if normalized !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then raise exception 'invalid email'; end if;
+  if exists(select 1 from public.invitations where household_id=target_household and lower(email)=normalized and status='pending' and expires_at > now()) then raise exception 'an active invitation already exists for this email'; end if;
+  token := encode(extensions.gen_random_bytes(32),'hex');
+  insert into public.invitations(household_id,email,token_hash,expires_at,invited_by)
+  values(target_household,normalized,encode(extensions.digest(token,'sha256'),'hex'),now()+interval '7 days',auth.uid());
+  insert into public.audit_logs(household_id,actor_id,action,entity_type,detail)
+  values(target_household,auth.uid(),'create','invitation',jsonb_build_object('email',normalized));
+  return token;
+end;
+$$;
+
+create or replace function public.accept_invitation(raw_token text) returns uuid
+language plpgsql security definer set search_path=pg_catalog,public as $$
+declare
+  inv public.invitations;
+  user_email text;
+  target_household uuid;
+  household_status text;
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  select lower(email) into user_email from auth.users where id=auth.uid();
+  select household_id into target_household from public.invitations
+  where token_hash=encode(extensions.digest(raw_token,'sha256'),'hex');
+  if target_household is null then raise exception 'invitation is invalid or expired'; end if;
+
+  select status into household_status from public.households where id=target_household for update;
+  select * into inv from public.invitations
+  where token_hash=encode(extensions.digest(raw_token,'sha256'),'hex') for update;
+  if inv.id is null or inv.status <> 'pending' or inv.expires_at <= now() then raise exception 'invitation is invalid or expired'; end if;
+  if lower(inv.email) <> user_email then raise exception 'invitation email does not match signed-in account'; end if;
+  if household_status <> 'active' then raise exception 'household is archived'; end if;
+  if exists(select 1 from public.household_members where household_id=target_household and user_id=auth.uid()) then raise exception 'already a member'; end if;
+  if (select count(*) from public.household_members where household_id=target_household and active) >= 2 then raise exception 'household already has two active members'; end if;
+
+  insert into public.household_members(household_id,user_id,role) values(target_household,auth.uid(),'member');
+  update public.invitations set status='accepted',accepted_at=now(),accepted_by=auth.uid() where id=inv.id;
+  insert into public.audit_logs(household_id,actor_id,action,entity_type,entity_id)
+  values(target_household,auth.uid(),'accept','invitation',inv.id);
+  return target_household;
+end;
+$$;
+
 revoke all on function public.shares_active_household(uuid) from public;
 revoke all on function public.validate_proposal_payload(uuid,jsonb) from public;
 revoke all on function public.submit_proposal(uuid,jsonb,uuid) from public;
 revoke all on function public.decide_proposal(uuid,boolean,text) from public;
 revoke all on function public.bump_household_ledger_version() from public;
+revoke all on function public.create_invitation(uuid,text) from public;
+revoke all on function public.accept_invitation(text) from public;
 grant execute on function public.shares_active_household(uuid) to authenticated;
 grant execute on function public.submit_proposal(uuid,jsonb,uuid) to authenticated;
 grant execute on function public.decide_proposal(uuid,boolean,text) to authenticated;
+grant execute on function public.create_invitation(uuid,text) to authenticated;
+grant execute on function public.accept_invitation(text) to authenticated;
