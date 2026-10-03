@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import {testP6} from './test-p6.mjs';
 import {testP7} from './test-p7.mjs';
+import {testLedgerUX} from './test-ledger-ux.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'gongzhu-p4-db-'));
 const port = Number(process.env.GONGZHU_TEST_PG_PORT ?? 55439);
@@ -294,6 +295,7 @@ try {
   });
   await testP6({a,b,c,admin,household,userA,claim,request,submit,proposal,rpcSubmit,decide,createInvestment,buyPayload,basisFor,check});
   await testP7({a,b,c,admin,userA,userB,check});
+  await testLedgerUX({a,b,c,admin,household,category,rpcSubmit,decide,check,userA});
 } finally {
   for (const connection of connections) await connection.end().catch(() => {});
   await database.stop().catch(() => {}); await rm(directory,{recursive:true,force:true});

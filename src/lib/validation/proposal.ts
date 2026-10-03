@@ -57,7 +57,7 @@ export const proposalSchema = z.discriminatedUnion("type", [
   if (value.type === "currency_exchange" && value.currency === value.destinationCurrency) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: "换汇的来源和目标币种不能相同", path: ["destinationCurrency"] });
   }
-  if (["expense", "expense_refund", "reimbursement"].includes(value.type) && (("projectId" in value && Boolean(value.projectId)) !== ("project" in value && Boolean(value.project)))) {
+  if (["expense", "expense_refund", "reimbursement"].includes(value.type) && (("projectId" in value && Boolean(value.projectId) && !("project" in value && Boolean(value.project))) || (value.type === "expense_refund" && Boolean(value.project) && !value.projectId))) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: "事项引用与名称快照必须同时提供", path: ["projectId"] });
   }
   if (value.type === "expense_refund" && ((Boolean(value.categoryId)) !== Boolean(value.category))) {

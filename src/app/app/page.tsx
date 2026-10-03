@@ -1,3 +1,4 @@
+import { buildLedgerRecordStates } from "@/lib/domain/ledger-record-states";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ledgerEventFromRow } from "@/lib/domain/ledger-adapter";
@@ -150,6 +151,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
   const spendingReport = buildSpendingReport(events, reportingCurrency, historicalRates, ledgerFilters, memberNames);
 
   return <AppClient
+    ledgerRecordStates={buildLedgerRecordStates(events, snapshot.proposals, reimbursementClaims, activity.map(row => ({ id: String(row.id), status: String(row.status), proposalId: typeof row.proposal_id === "string" ? row.proposal_id : undefined })))}
     key={`${query.tab ?? "overview"}:${query.entry ?? ""}:${query.batch ?? ""}`}
     household={{ id: householdId, name: snapshot.configuration.name, reportingCurrency, ledgerVersion: version }}
     userId={user.id}

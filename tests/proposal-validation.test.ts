@@ -71,7 +71,9 @@ describe("按提案类型校验 AC-02/05/21/76", () => {
   it("消费和代付共享分类及可选事项，禁止把事件类型当分类", () => {
     const spending = { ...base, type: "expense", amountMinor: 100, category: "餐饮", categoryId, project: "2026 香港旅行", projectId };
     expect(proposalSchema.safeParse(spending).success).toBe(true);
-    expect(proposalSchema.safeParse({ ...spending, projectId: undefined }).success).toBe(false);
+    expect(proposalSchema.safeParse({ ...spending, projectId: undefined }).success).toBe(true);
+    expect(proposalSchema.safeParse({ ...spending, project: undefined }).success).toBe(false);
+    expect(proposalSchema.safeParse({ ...spending, type: "reimbursement", payerMemberId, projectId: undefined }).success).toBe(true);
     expect(proposalSchema.safeParse({ ...spending, category: "代付" }).success).toBe(false);
     expect(proposalSchema.safeParse({ ...spending, categoryId: undefined }).success).toBe(false);
   });
