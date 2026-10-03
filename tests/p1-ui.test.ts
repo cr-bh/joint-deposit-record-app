@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { AccountCashCards, Dashboard, FxRateModal, FxRatePanel, InvestmentList, Ledger, LedgerSettings, NewRecordButton, PayerSelect, RecordModal } from "@/app/app/app-client";
+import { AccountCashCards, Dashboard, FxRateModal, FxRatePanel, InvestmentList, Ledger, LedgerSettings, NewRecordButton, PayerSelect, RecordModal, Reimbursements } from "@/app/app/app-client";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const row = { id, title: "测试存入", entry_type: "deposit", amount_minor: 10000, currency: "USD", status: "posted", occurred_at: "2026-09-01", created_at: "2026-09-01T00:00:00Z" };
@@ -56,6 +56,7 @@ describe("P1 页面金额回归（服务端组件渲染，非双人E2E）", () =
     expect(generalHtml).toContain("消费分类");
     expect(generalHtml).toContain("购物");
     expect(generalHtml).toContain("2026 香港旅行");
+    expect(generalHtml).not.toContain("报销付款");
     expect(generalHtml).not.toContain("投资买入");
     expect(investmentHtml).toContain("测试标的 · 投资操作");
     expect(investmentHtml).toContain("当前标的：");
@@ -128,5 +129,17 @@ describe("P1 页面金额回归（服务端组件渲染，非双人E2E）", () =
     expect(html).toContain("玩乐 · 内置");
     expect(html).toContain("旧事项");
     expect(html).toContain("恢复");
+  });
+
+  it("代付明细区分待审、已确认未付和部分打款，收款人取实际垫付人", () => {
+    const members = [{ user_id: id, profiles: { display_name: "顾言" } }];
+    const claims = [{ id, sourceEntryId: id, claimantId: id, currency: "USD" as const, originalMinor: 10000, settledMinor: 4000, remainingMinor: 6000, state: "partially_paid" as const, title: "旅行交通", category: "交通", project: "香港旅行", occurredAt: "2026-09-01" }];
+    const proposals = [{ id, status: "pending_approval", payload: { type: "reimbursement", title: "待审餐饮", amountMinor: 5000, currency: "USD", category: "餐饮", payerMemberId: id } }];
+    const html = renderToStaticMarkup(createElement(Reimbursements,{ claims,proposals,members }));
+    expect(html).toContain("待审代付");
+    expect(html).toContain("批准前不计入债权");
+    expect(html).toContain("部分打款");
+    expect(html).toContain("待打款 $60.00 / 原额 $100.00");
+    expect(html).toContain("实际垫付人：顾言");
   });
 });
