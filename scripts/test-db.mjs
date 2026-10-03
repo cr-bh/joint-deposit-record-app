@@ -36,6 +36,7 @@ try {
   const migrations = (await readdir(migrationDir)).filter(name => name.endsWith('.sql')).sort();
   const oldMember=randomUUID(),oldPartner=randomUUID(),oldHousehold=randomUUID(),oldSource=randomUUID(),oldPayment=randomUUID();
   let oldClaim;
+  const oldInvestment=randomUUID(),oldBuy=randomUUID(),oldValuation=randomUUID();
   for (const name of migrations) {
     if(name.includes('_p4_')) {
       // Seed a populated P3 database before applying P4: its existing partial payment must survive.
@@ -50,6 +51,10 @@ try {
       await admin.query("insert into public.ledger_entries(id,household_id,proposal_id,entry_type,amount_minor,currency,occurred_at,effective_sequence,title,payee_member_id,account_kind) values($1,$2,$3,'settlement',5000,'USD','2026-09-02',2,'legacy payment',$4,'bank')",[oldPayment,oldHousehold,paymentProposal,oldMember]);
       oldClaim=(await admin.query('select id from public.reimbursement_claims where source_entry_id=$1',[oldSource])).rows[0].id;
       await admin.query('insert into public.settlement_allocations(household_id,settlement_entry_id,claim_id,amount_minor) values($1,$2,$3,5000)',[oldHousehold,oldPayment,oldClaim]);
+    }
+    if(name.includes('_p5_')) {
+      await admin.query("insert into public.investments(id,household_id,name,currency,created_by) values($1,$2,'P4 legacy investment','USD',$3)",[oldInvestment,oldHousehold,oldMember]);
+      await admin.query("insert into public.proposals(id,household_id,submitter_id,idempotency_key,payload) values($1,$2,$3,$4,$5::jsonb),($6,$2,$3,$7,$8::jsonb)",[oldBuy,oldHousehold,oldMember,randomUUID(),JSON.stringify({type:'investment_buy',investmentId:oldInvestment,quantityMilli:1000,amountMinor:100,currency:'USD',occurredAt:'2026-09-04',title:'pending P4 buy'}),oldValuation,randomUUID(),JSON.stringify({type:'investment_valuation',investmentId:oldInvestment,unitValueTenThousandths:12000,amountMinor:0,currency:'USD',occurredAt:'2026-09-04',title:'pending P4 unit valuation'})]);
     }
     try { await admin.query(await readFile(new URL(name, migrationDir), 'utf8')); }
     catch (error) { console.error(`Migration failed: ${name}`); throw error; }
@@ -215,6 +220,75 @@ try {
     const mutation=await a.query('update public.reimbursement_claims set claimed_minor=1 returning id');assert.equal(mutation.rowCount,0);
     await assert.rejects(a.query("insert into public.settlement_batches(household_id,proposal_id,claimant_id,account_kind,currency,amount_minor) values($1,$2,$3,'bank','USD',1)",[household,randomUUID(),userA]),/row-level security/);
     const exact=(await a.query('select usd_to_cny from public.fx_rate_snapshots_exact limit 1')).rows[0].usd_to_cny;assert.equal(typeof exact,'string');
+  });
+  await check('P5 populated P4 upgrade retains pending milli-share buy and unit-price valuation',async()=>{
+    const oldB=await connect();await oldB.query('set role authenticated');await oldB.query("select set_config('request.jwt.claim.sub',$1,false)",[oldPartner]);
+    await oldB.query('select public.decide_proposal($1,true,null)',[oldBuy]);await oldB.query('select public.decide_proposal($1,true,null)',[oldValuation]);
+    assert.equal((await oldB.query('select quantity_micro from public.ledger_entries where proposal_id=$1',[oldBuy])).rows[0].quantity_micro,'1000000');assert.equal((await oldB.query('select unit_value_1e8 from public.investment_valuations where proposal_id=$1',[oldValuation])).rows[0].unit_value_1e8,'120000000');
+  });
+  const createInvestment=async(name='ETF',currency='USD')=>(await a.query("select public.create_investment_direct($1,$2,'TEST','ETF',$3,'股','fixture','weekly') id",[household,name,currency])).rows[0].id;
+  const buyPayload=(investmentId,q=1000000,amount=10000,date='2026-09-02')=>({type:'investment_buy',investmentId,quantityMicro:q,amountMinor:amount,currency:'USD',occurredAt:date,title:'buy'});
+  const basisFor=async(i,date='2026-09-02')=>(await a.query('select public.get_investment_basis($1,$2) basis',[i,date])).rows[0].basis;
+  await check('P5 zero-opening metadata, immutable currency, six decimal shares, legacy bypass blocked',async()=>{
+    const i=await createInvestment();const row=(await a.query('select * from public.investments where id=$1',[i])).rows[0];assert.equal(row.opening_quantity_milli,'0');assert.equal(row.opening_cost_minor,'0');assert.equal(row.unit_name,'股');
+    const entry=await decide(b,await rpcSubmit(a,buyPayload(i,1,1)));assert.equal((await a.query('select quantity_micro from public.ledger_entries where id=$1',[entry])).rows[0].quantity_micro,'1');
+    await a.query("select public.update_investment_metadata($1,'Updated','T','自定分类','份','new note','monthly')",[i]);assert.equal((await a.query('select valuation_cadence,currency from public.investments where id=$1',[i])).rows[0].valuation_cadence,'monthly');
+    await assert.rejects(c.query('select public.get_investment_basis($1,$2)',[i,'2026-09-02']),/not authorized/);
+    await assert.rejects(a.query('select public.create_investment_proposal($1,$2::jsonb,$3)',[household,'{}',randomUUID()]),/does not exist/);
+    const direct=await a.query('update public.investments set opening_cost_minor=999 returning id');assert.equal(direct.rowCount,0);
+  });
+  await check('P5 fixed funding T=B, T>B and T<B; duplicate approval posts exactly two steps',async()=>{
+    for(const transferAmount of [20000,30000,10000]){
+      const i=await createInvestment(),p={...buyPayload(i,1000000,20000),funding:{currency:'USD',amountMinor:transferAmount,destinationAmountMinor:transferAmount,occurredAt:'2026-09-01'}},key=randomUUID();
+      const id=await rpcSubmit(a,p,key);assert.equal(await rpcSubmit(a,p,key),id);await assert.rejects(rpcSubmit(a,{...p,amountMinor:1},key),/幂等键/);
+      await decide(b,id);await decide(b,id);
+      const moves=(await a.query('select * from public.cash_transfers where proposal_id=$1',[id])).rows,entries=(await a.query('select * from public.ledger_entries where proposal_id=$1',[id])).rows;
+      assert.equal(moves.length,1);assert.equal(entries.length,1);assert.equal(moves[0].amount_minor,String(transferAmount));assert.equal(entries[0].amount_minor,'20000');assert.equal(entries[0].funding_transfer_id,moves[0].id);assert(Number(moves[0].effective_sequence)<Number(entries[0].effective_sequence));
+      assert.equal(60000-transferAmount,transferAmount===30000?30000:transferAmount===20000?40000:50000);assert.equal(2000+Number(moves[0].destination_amount_minor)-Number(entries[0].amount_minor),2000+transferAmount-20000);
+    }
+  });
+  await check('P5 cross-currency actual arrival 100/95 plus buy 80, no duplicated expense or contribution',async()=>{
+    for(const arrival of [10000,9500]){
+      const i=await createInvestment(),id=await rpcSubmit(a,{...buyPayload(i,1000000,8000),funding:{currency:'CNY',amountMinor:72000,destinationAmountMinor:arrival,occurredAt:'2026-09-01'}});await decide(b,id);
+      const m=(await a.query('select * from public.cash_transfers where proposal_id=$1',[id])).rows[0];assert.equal(m.destination_amount_minor,String(arrival));assert(m.fx_snapshot_id);assert.equal(m.movement_type,'currency_exchange');assert.equal(1000+Number(m.destination_amount_minor)-8000,arrival===10000?3000:2500);
+      assert.equal((await a.query('select count(*) from public.ledger_entries where proposal_id=$1 and entry_type in (\'expense\',\'deposit\')',[id])).rows[0].count,'0');
+    }
+  });
+  await check('P5 injected second-step failure rolls back transfer and proposal decision',async()=>{
+    const i=await createInvestment(),id=await rpcSubmit(a,{...buyPayload(i),funding:{currency:'USD',amountMinor:10000,destinationAmountMinor:10000,occurredAt:'2026-09-01'}});
+    await admin.query(`create function public.test_fail_p5() returns trigger language plpgsql as $$begin if new.proposal_id='${id}' then raise exception 'injected failure';end if;return new;end;$$;create trigger test_fail_p5 before insert on public.ledger_entries for each row execute function public.test_fail_p5();`);
+    try{await assert.rejects(decide(b,id),/injected failure/);assert.equal((await a.query('select count(*) from public.cash_transfers where proposal_id=$1',[id])).rows[0].count,'0');assert.equal((await a.query('select status from public.proposals where id=$1',[id])).rows[0].status,'pending_approval');}
+    finally{await admin.query('drop trigger test_fail_p5 on public.ledger_entries;drop function public.test_fail_p5()');}
+    await decide(b,id);
+  });
+  await check('P5 entire history replay rejects backdated oversell; concurrent sells serialize',async()=>{
+    const i=await createInvestment();await decide(b,await rpcSubmit(a,buyPayload(i,1000000,10000,'2026-09-01')));
+    const sell={...buyPayload(i,1000000,10000,'2026-09-03'),type:'investment_sell'};await decide(b,await rpcSubmit(a,sell));
+    const back=await rpcSubmit(a,{...sell,quantityMicro:1,occurredAt:'2026-09-02'});await assert.rejects(decide(b,back),/历史持仓/);assert.equal((await a.query('select count(*) from public.ledger_entries where proposal_id=$1',[back])).rows[0].count,'0');
+    const j=await createInvestment();await decide(b,await rpcSubmit(a,buyPayload(j)));
+    const first=await rpcSubmit(a,{...sell,investmentId:j,quantityMicro:800000}),second=await rpcSubmit(b,{...sell,investmentId:j,quantityMicro:800000});
+    const results=await Promise.allSettled([decide(b,first),decide(a,second)]);assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+  });
+  await check('P5 total-market ratio and zero valuation persist exact basis; no cash event',async()=>{
+    const i=await createInvestment();await decide(b,await rpcSubmit(a,buyPayload(i,3000000,100)));
+    for(const total of [1,0]){
+      const basis=await basisFor(i),id=await rpcSubmit(a,{type:'investment_valuation',investmentId:i,currency:'USD',amountMinor:0,title:'total value',occurredAt:'2026-09-02',valuationMode:'total_market',totalValueMinor:total,basis});await decide(b,id);
+      const v=(await a.query('select * from public.investment_valuations where proposal_id=$1',[id])).rows[0];assert.equal(v.total_value_minor,String(total));assert.equal(v.quantity_micro,'3000000');assert.equal(v.basis_signature,basis.signature);assert.equal((await a.query('select count(*) from public.ledger_entries where proposal_id=$1',[id])).rows[0].count,'0');
+    }
+  });
+  await check('P5 pending valuation rejects changed historical dependencies; later trades remain legal',async()=>{
+    const i=await createInvestment();await decide(b,await rpcSubmit(a,buyPayload(i)));
+    const payload={type:'investment_valuation',investmentId:i,currency:'USD',amountMinor:0,title:'total',occurredAt:'2026-09-02',valuationMode:'total_market',totalValueMinor:12000,basis:await basisFor(i)};
+    const id=await rpcSubmit(a,payload);await decide(b,await rpcSubmit(a,buyPayload(i,1000000,10000,'2026-09-01')));await assert.rejects(decide(b,id),/依赖持仓已变化/);assert.equal((await a.query('select count(*) from public.investment_valuations where proposal_id=$1',[id])).rows[0].count,'0');
+    await assert.rejects(rpcSubmit(a,payload),/基准已变化/);
+    const updated=await rpcSubmit(a,{...payload,basis:await basisFor(i)});await decide(b,await rpcSubmit(a,buyPayload(i,1000000,10000,'2026-09-03')));await decide(b,updated);
+  });
+  await check('P5 existing transfer association debits only buy; malformed funding blocked',async()=>{
+    const i=await createInvestment(),funded=await rpcSubmit(a,{...buyPayload(i),funding:{currency:'USD',amountMinor:10000,destinationAmountMinor:10000,occurredAt:'2026-09-01'}});await decide(b,funded);const t=(await a.query('select id from public.cash_transfers where proposal_id=$1',[funded])).rows[0].id;
+    const id=await rpcSubmit(a,{...buyPayload(i),linkedTransferId:t});await decide(b,id);assert.equal((await a.query('select count(*) from public.cash_transfers where proposal_id=$1',[id])).rows[0].count,'0');
+    await assert.rejects(rpcSubmit(a,{...buyPayload(i),funding:{currency:'USD',amountMinor:10000,destinationAmountMinor:9500,occurredAt:'2026-09-01'}}),/同币种/);
+    await assert.rejects(rpcSubmit(a,{...buyPayload(i),funding:{currency:'USD',amountMinor:10000,destinationAmountMinor:10000,occurredAt:'2026-09-03'}}),/转入日期/);
+    await assert.rejects(c.query('select public.submit_proposal($1,$2::jsonb,$3)',[household,JSON.stringify(buyPayload(i)),randomUUID()]),/not authorized/);
   });
 } finally {
   for (const connection of connections) await connection.end().catch(() => {});

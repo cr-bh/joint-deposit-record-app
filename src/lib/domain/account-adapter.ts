@@ -12,6 +12,7 @@ const cashTransferRow = z.object({
   destination_amount_minor: integer.nullish(),
   destination_currency: z.enum(["USD", "CNY", "HKD"]).nullish(),
   movement_type: z.enum(["same_currency", "currency_exchange"]).nullish(),
+  occurred_at: z.string().date().optional(),
   status: z.enum(["posted", "voided"]),
 });
 
@@ -19,6 +20,7 @@ export function cashTransferFromRow(input: unknown): CashTransfer {
   const row = cashTransferRow.parse(input);
   return {
     id: row.id,
+    occurredAt: row.occurred_at,
     amountMinor: row.amount_minor,
     currency: row.currency,
     sourceAccountKind: row.source_account_kind,

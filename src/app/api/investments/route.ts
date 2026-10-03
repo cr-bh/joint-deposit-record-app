@@ -1,14 +1,12 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
-
-const schema = z.object({ name: z.string().trim().min(1).max(120), ticker: z.string().trim().max(30).optional(), assetType: z.string().trim().min(1).max(40), currency: z.enum(["USD", "CNY", "HKD"]) });
+import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { investmentCreateSchema } from '@/lib/validation/investment';
 export async function POST(request: Request) {
-  const { householdId, ...input } = schema.extend({ householdId: z.string().uuid() }).parse(await request.json());
-  const supabase = await createClient();
+  const parsed = investmentCreateSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? '标的信息无效' }, {status:400});
+  const input = parsed.data, supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
-  const { data, error } = await supabase.rpc("create_investment_direct", { target_household: householdId, investment_name: input.name, ticker_input: input.ticker ?? "", asset_type_input: input.assetType, investment_currency: input.currency });
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  return NextResponse.json({ id: data });
+  if (!user) return NextResponse.json({error:'未登录'},{status:401});
+  const {data,error} = await supabase.rpc('create_investment_direct',{target_household:input.householdId,investment_name:input.name,ticker_input:input.ticker??'',asset_type_input:input.assetType,investment_currency:input.currency,unit_name_input:input.unitName,note_input:input.note,cadence_input:input.valuationCadence});
+  return error ? NextResponse.json({error:error.message},{status:400}) : NextResponse.json({id:data});
 }

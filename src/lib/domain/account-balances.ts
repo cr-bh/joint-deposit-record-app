@@ -3,6 +3,7 @@ import { safeInteger } from "./integer-math";
 
 export type CashTransfer = {
   id: string;
+  occurredAt?: string;
   amountMinor: number;
   currency: Currency;
   sourceAccountKind: CashAccountKind;

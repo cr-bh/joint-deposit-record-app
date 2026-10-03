@@ -4,7 +4,7 @@ import { ledgerEventFromRow } from "@/lib/domain/ledger-adapter";
 import { cashTransferFromRow } from "@/lib/domain/account-adapter";
 import { accountCashBalances, combinedCashBalances } from "@/lib/domain/account-balances";
 import { summarizeLedger } from "@/lib/domain/ledger-summary";
-import { calculateInvestmentPosition, latestValuation, valuePosition } from "@/lib/domain/investment-calculations";
+import { buildInvestmentSnapshot } from "@/lib/domain/investment-snapshot";
 import { fxRateSnapshotFromRow, isFxSnapshotStale, latestEffectiveFxSnapshot, ratesFromSnapshot } from "@/lib/domain/fx-rates";
 import { spendingDimensionFromRow } from "@/lib/domain/spending-dimensions";
 import { filterLedgerActivity, normalizeLedgerFilters } from "@/lib/domain/ledger-filters";
@@ -112,9 +112,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
   const investmentSnapshots = Object.fromEntries(snapshot.investments.map((investment) => {
     const id = String(investment.id);
     try {
-      const position = calculateInvestmentPosition(events, id, Number(investment.opening_quantity_milli), Number(investment.opening_cost_minor));
-      const latest = latestValuation(snapshot.valuations.filter((value) => value.investment_id === id).map((value) => ({ id: String(value.id), valueDate: String(value.value_date), createdAt: String(value.created_at), unitValueTenThousandths: Number(value.unit_value_1e4 ?? Number(value.unit_value_minor) * 100) })));
-      return [id, { position, valuation: valuePosition(position, latest), latestValueDate: latest?.valueDate } satisfies InvestmentSnapshot];
+      return [id, buildInvestmentSnapshot(events, investment, snapshot.valuations) satisfies InvestmentSnapshot];
     } catch (error) {
       return [id, { error: error instanceof Error ? error.message : "投资流水需核对" }];
     }
@@ -158,11 +156,12 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
     initialBatchId={typeof query.batch === "string" ? query.batch : undefined}
     ledgerSummary={ledgerSummary}
     postedEntryCount={events.filter((event) => event.status === "posted").length + transfers.filter((transfer) => transfer.status === "posted").length}
-    initialTab={query.tab === "ledger" ? "流水" : query.tab === "reimbursements" ? "代付与报销" : "总览"}
+    initialTab={query.tab === "ledger" ? "流水" : query.tab === "investments" ? "投资" : query.tab === "reimbursements" ? "代付与报销" : "总览"}
     ledgerPage={ledgerPage.page}
     ledgerPageCount={ledgerPage.pageCount}
     ledgerTotalEntries={filteredActivity.length}
     ledgerFilters={ledgerFilters}
     investmentSnapshots={investmentSnapshots}
+    investmentTransfers={transfers}
   />;
 }

@@ -71,12 +71,12 @@ export default async function PreviewPage({ searchParams }: { searchParams: Prom
   ];
   const { claims: reimbursementClaims, batches: settlementBatches } = projectReimbursements(claimRows, allocationRows, batchRows, [...proposals, approvedProposal], entries.map(ledgerEventFromRow));
   const investments = [
-    { id: ETF, name: "标普 500 ETF", currency: "USD", opening_quantity_milli: 0, opening_cost_minor: 0 },
-    { id: FUND, name: "人民币指数基金", currency: "CNY", opening_quantity_milli: 0, opening_cost_minor: 0 },
+    { id: ETF, name: "标普 500 ETF", asset_type: "基金 / ETF", unit_name: "份", valuation_cadence: "weekly", currency: "USD", opening_quantity_milli: 0, opening_cost_minor: 0 },
+    { id: FUND, name: "人民币指数基金", asset_type: "基金 / ETF", unit_name: "份", valuation_cadence: "monthly", currency: "CNY", opening_quantity_milli: 0, opening_cost_minor: 0 },
   ];
   const valuations = [{ id: "00000000-0000-4000-8000-000000000401", investment_id: ETF, value_date: "2026-09-07", created_at: at("2026-09-07", "09:00"), unit_value_minor: 1200, unit_value_1e4: 120000 }];
   const members = [{ user_id: A, role: "owner", profiles: { display_name: "顾言" } }, { user_id: B, role: "member", profiles: { display_name: "林知夏" } }];
   const fx = fxRateSnapshotFromRow({ id: FX, usd_to_cny: "7.2", usd_to_hkd: "7.8", effective_at: "2026-09-07T10:00:00Z", source_note: "银行 App 参考价，人工录入", created_by: A, approved_by: B, approved_at: "2026-09-14T12:05:00Z" });
   const fxSnapshot = { ...fx, stale: false };
-  return <PreviewClient initialBatchId={typeof query.batch === "string" ? query.batch : undefined} entries={filteredActivity} totalEntries={filteredActivity.length} investmentEntries={entries} transfers={cashTransfers} proposals={proposals} reimbursementClaims={reimbursementClaims} settlementBatches={settlementBatches} investments={investments} valuations={valuations} members={members} accounts={accounts} accountBalances={accountBalances} fxSnapshot={fxSnapshot} rates={ratesFromSnapshot(fx)} spendingCategories={spendingCategories} spendingProjects={spendingProjects} ledgerFilters={ledgerFilters} initialTab={query.tab === "ledger" ? "流水" : query.tab === "reimbursements" ? "代付与报销" : "总览"}/>;
+  return <PreviewClient initialBatchId={typeof query.batch === "string" ? query.batch : undefined} entries={filteredActivity} totalEntries={filteredActivity.length} investmentEntries={entries} transfers={cashTransfers} proposals={proposals} reimbursementClaims={reimbursementClaims} settlementBatches={settlementBatches} investments={investments} valuations={valuations} members={members} accounts={accounts} accountBalances={accountBalances} fxSnapshot={fxSnapshot} rates={ratesFromSnapshot(fx)} spendingCategories={spendingCategories} spendingProjects={spendingProjects} ledgerFilters={ledgerFilters} initialTab={query.tab === "ledger" ? "流水" : query.tab === "investments" ? "投资" : query.tab === "reimbursements" ? "代付与报销" : "总览"}/>;
 }
