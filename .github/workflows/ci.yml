@@ -19,5 +19,6 @@ jobs:
       - run: npm ci
       - run: npm run typecheck -- --pretty false --incremental false
       - run: npm test -- --maxWorkers=1 --minWorkers=1
+      - run: npm run test:db
       - run: npm run lint
       - run: npm run build -- --webpack

@@ -10,6 +10,7 @@ const claimRow = z.object({
   claimed_minor: z.number().int().safe().positive(),
   status: z.enum(["open", "partially_settled", "settled", "voided"]),
   created_at: z.string().datetime({ offset: true }),
+  version: z.number().int().safe().positive().default(1),
 });
 
 export type ClaimState = "confirmed_unpaid" | "partially_paid" | "settled" | "voided";
@@ -21,6 +22,9 @@ export type ReimbursementClaimView = {
   originalMinor: number;
   settledMinor: number;
   remainingMinor: number;
+  reservedMinor?: number;
+  availableMinor?: number;
+  version?: number;
   state: ClaimState;
   title: string;
   category?: string;
@@ -28,7 +32,7 @@ export type ReimbursementClaimView = {
   occurredAt: string;
 };
 
-export function reimbursementClaimFromRows(input: unknown, source: LedgerEvent, settledMinor = 0): ReimbursementClaimView {
+export function reimbursementClaimFromRows(input: unknown, source: LedgerEvent, settledMinor = 0, reservedMinor = 0): ReimbursementClaimView {
   const claim = claimRow.parse(input);
   const settled = safeInteger(settledMinor,"已打款金额");
   if (source.id !== claim.source_entry_id || source.type !== "reimbursement") throw new Error("代付原单与消费流水不匹配");
@@ -37,8 +41,10 @@ export function reimbursementClaimFromRows(input: unknown, source: LedgerEvent, 
   if (settled < 0 || settled > claim.claimed_minor) throw new Error("代付核销金额无效");
   const voided = claim.status === "voided" || source.status === "voided";
   const remainingMinor = voided ? 0 : claim.claimed_minor - settled;
+  const reserved = safeInteger(reservedMinor, "预留金额");
+  if (reserved < 0 || reserved > remainingMinor) throw new Error("代付预留额度无效");
   const state: ClaimState = voided ? "voided" : settled === claim.claimed_minor ? "settled" : settled > 0 ? "partially_paid" : "confirmed_unpaid";
-  return { id: claim.id, sourceEntryId: source.id, claimantId: claim.claimant_id, currency: claim.currency, originalMinor: claim.claimed_minor, settledMinor: settled, remainingMinor, state, title: source.title ?? "成员代付共同消费", category: source.category, project: source.project, occurredAt: source.occurredAt };
+  return { id: claim.id, sourceEntryId: source.id, claimantId: claim.claimant_id, currency: claim.currency, originalMinor: claim.claimed_minor, settledMinor: settled, remainingMinor, reservedMinor: reserved, availableMinor: remainingMinor - reserved, version: claim.version, state, title: source.title ?? "成员代付共同消费", category: source.category, project: source.project, occurredAt: source.occurredAt };
 }
 
 export const claimStateLabel: Record<ClaimState,string> = {

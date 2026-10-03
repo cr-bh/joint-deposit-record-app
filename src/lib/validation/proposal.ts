@@ -24,7 +24,6 @@ export const proposalSchema = z.discriminatedUnion("type", [
   z.object({ ...common, ...projectFields, type: z.literal("expense"), amountMinor: positiveMoney, category, categoryId, accountKind: accountKind.optional() }).strict(),
   z.object({ ...common, ...projectFields, type: z.literal("expense_refund"), amountMinor: positiveMoney, category: category.optional(), categoryId: categoryId.optional(), accountKind: accountKind.optional() }).strict(),
   z.object({ ...common, ...projectFields, type: z.literal("reimbursement"), amountMinor: positiveMoney, category, categoryId, payerMemberId: memberId }).strict(),
-  z.object({ ...common, type: z.literal("settlement"), amountMinor: positiveMoney, accountKind: accountKind.optional() }).strict(),
   z.object({ ...common, type: z.literal("account_transfer"), amountMinor: positiveMoney, sourceAccountKind: accountKind, destinationAccountKind: accountKind }).strict(),
   z.object({ ...common, type: z.literal("currency_exchange"), amountMinor: positiveMoney, sourceAccountKind: accountKind, destinationAccountKind: accountKind, destinationAmountMinor: positiveMoney, destinationCurrency: currency }).strict(),
   z.object({ ...common, type: z.literal("fx_rate_update"), amountMinor: z.literal(0), currency: z.literal("USD"), effectiveAt: z.string().datetime({ offset: true }), usdToCny: positiveRate, usdToHkd: positiveRate, sourceNote: z.string().trim().min(1).max(240) }).strict(),

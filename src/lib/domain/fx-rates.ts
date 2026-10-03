@@ -18,6 +18,8 @@ export type FxRateSnapshot = {
   id: string;
   usdToCny: number;
   usdToHkd: number;
+  usdToCnyExact?: string;
+  usdToHkdExact?: string;
   effectiveAt: string;
   sourceNote: string;
   createdBy: string;
@@ -27,10 +29,13 @@ export type FxRateSnapshot = {
 
 export function fxRateSnapshotFromRow(input: unknown): FxRateSnapshot {
   const row = snapshotRow.parse(input);
+  const original = input as Record<string, unknown>;
   return {
     id: row.id,
     usdToCny: row.usd_to_cny,
     usdToHkd: row.usd_to_hkd,
+    usdToCnyExact: typeof original.usd_to_cny === "string" ? original.usd_to_cny : row.usd_to_cny.toFixed(10),
+    usdToHkdExact: typeof original.usd_to_hkd === "string" ? original.usd_to_hkd : row.usd_to_hkd.toFixed(10),
     effectiveAt: row.effective_at,
     sourceNote: row.source_note,
     createdBy: row.created_by,

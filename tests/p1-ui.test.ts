@@ -1,7 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { AccountCashCards, Dashboard, FxRateModal, FxRatePanel, InvestmentList, Ledger, LedgerSettings, NewRecordButton, PayerSelect, RecordModal, Reimbursements } from "@/app/app/app-client";
+import { AccountCashCards, Dashboard, FxRateModal, FxRatePanel, InvestmentList, Ledger, LedgerSettings, NewRecordButton, PayerSelect, RecordModal } from "@/app/app/app-client";
+import ReimbursementCenter from "@/app/app/reimbursement-center";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const row = { id, title: "测试存入", entry_type: "deposit", amount_minor: 10000, currency: "USD", status: "posted", occurred_at: "2026-09-01", created_at: "2026-09-01T00:00:00Z" };
@@ -135,11 +136,12 @@ describe("P1 页面金额回归（服务端组件渲染，非双人E2E）", () =
     const members = [{ user_id: id, profiles: { display_name: "顾言" } }];
     const claims = [{ id, sourceEntryId: id, claimantId: id, currency: "USD" as const, originalMinor: 10000, settledMinor: 4000, remainingMinor: 6000, state: "partially_paid" as const, title: "旅行交通", category: "交通", project: "香港旅行", occurredAt: "2026-09-01" }];
     const proposals = [{ id, status: "pending_approval", payload: { type: "reimbursement", title: "待审餐饮", amountMinor: 5000, currency: "USD", category: "餐饮", payerMemberId: id } }];
-    const html = renderToStaticMarkup(createElement(Reimbursements,{ claims,proposals,members }));
+    const html = renderToStaticMarkup(createElement(ReimbursementCenter,{ householdId: id, userId: id, claims,proposals,members,batches: [],refresh: () => {},notify: () => {} }));
     expect(html).toContain("待审代付");
     expect(html).toContain("批准前不计入债权");
     expect(html).toContain("部分打款");
-    expect(html).toContain("待打款 $60.00 / 原额 $100.00");
-    expect(html).toContain("实际垫付人：顾言");
+    expect(html).toContain("可报销 USD $60.00");
+    expect(html).toContain("原额 USD $100.00");
+    expect(html).toContain("顾言");
   });
 });

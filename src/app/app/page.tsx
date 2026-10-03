@@ -8,7 +8,7 @@ import { calculateInvestmentPosition, latestValuation, valuePosition } from "@/l
 import { fxRateSnapshotFromRow, isFxSnapshotStale, latestEffectiveFxSnapshot, ratesFromSnapshot } from "@/lib/domain/fx-rates";
 import { spendingDimensionFromRow } from "@/lib/domain/spending-dimensions";
 import { filterLedgerActivity, normalizeLedgerFilters } from "@/lib/domain/ledger-filters";
-import { reimbursementClaimFromRows } from "@/lib/domain/reimbursement-claims";
+import { projectReimbursements } from "@/lib/domain/settlement-batches";
 import type { Currency } from "@/lib/domain/balance-calculations";
 import { fetchAllPages, paginateLedgerRows, parseLedgerPage, readConsistentSnapshot } from "@/lib/server/ledger-snapshot";
 import AppClient, { type InvestmentSnapshot } from "./app-client";
@@ -16,7 +16,7 @@ import AppClient, { type InvestmentSnapshot } from "./app-client";
 type Row = Record<string, unknown>;
 const LIST_PAGE_SIZE = 100;
 
-type SearchParams = Promise<{ tab?: string | string[]; ledgerPage?: string | string[]; account?: string | string[]; currency?: string | string[]; category?: string | string[]; project?: string | string[]; payment?: string | string[] }>;
+type SearchParams = Promise<{ tab?: string | string[]; batch?: string | string[]; ledgerPage?: string | string[]; account?: string | string[]; currency?: string | string[]; category?: string | string[]; project?: string | string[]; payment?: string | string[] }>;
 
 export default async function LedgerPage({ searchParams }: { searchParams: SearchParams }) {
   const query = await searchParams;
@@ -40,9 +40,9 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
   };
 
   const { version, snapshot } = await readConsistentSnapshot(readVersion, async () => {
-    const [entries, proposals, investments, valuations, members, accounts, transfers, fxSnapshots, spendingCategories, spendingProjects, reimbursementClaims, settlementAllocations] = await Promise.all([
+    const [entries, proposals, investments, valuations, members, accounts, transfers, fxSnapshots, spendingCategories, spendingProjects, reimbursementClaims, settlementAllocations, settlementBatches] = await Promise.all([
       fetchAllPages<Row>(async (from, to) => {
-        const result = await supabase.from("ledger_entries").select("*").eq("household_id", householdId).eq("status", "posted").order("occurred_at", { ascending: false }).order("effective_sequence", { ascending: false }).range(from, to);
+        const result = await supabase.from("ledger_entries").select("*").eq("household_id", householdId).order("occurred_at", { ascending: false }).order("effective_sequence", { ascending: false }).range(from, to);
         return { data: result.data as Row[] | null, error: result.error };
       }),
       fetchAllPages<Row>(async (from, to) => {
@@ -70,7 +70,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
         return { data: result.data as Row[] | null, error: result.error };
       }),
       fetchAllPages<Row>(async (from, to) => {
-        const result = await supabase.from("fx_rate_snapshots").select("*").eq("household_id", householdId).eq("status", "approved").order("effective_at", { ascending: false }).order("approved_at", { ascending: false }).range(from, to);
+        const result = await supabase.from("fx_rate_snapshots_exact").select("*").eq("household_id", householdId).eq("status", "approved").order("effective_at", { ascending: false }).order("approved_at", { ascending: false }).range(from, to);
         return { data: result.data as Row[] | null, error: result.error };
       }),
       fetchAllPages<Row>(async (from, to) => {
@@ -89,8 +89,12 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
         const result = await supabase.from("settlement_allocations").select("*").eq("household_id", householdId).order("created_at").order("id").range(from, to);
         return { data: result.data as Row[] | null, error: result.error };
       }),
+      fetchAllPages<Row>(async (from, to) => {
+        const result = await supabase.from("settlement_batches").select("*").eq("household_id", householdId).order("created_at", { ascending: false }).order("id").range(from, to);
+        return { data: result.data as Row[] | null, error: result.error };
+      }),
     ]);
-    return { entries, proposals, investments, valuations, members, accounts, transfers, fxSnapshots, spendingCategories, spendingProjects, reimbursementClaims, settlementAllocations };
+    return { entries, proposals, investments, valuations, members, accounts, transfers, fxSnapshots, spendingCategories, spendingProjects, reimbursementClaims, settlementAllocations, settlementBatches };
   });
 
   const events = snapshot.entries.map(ledgerEventFromRow);
@@ -116,7 +120,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
     }
   })) as Record<string, InvestmentSnapshot>;
   const activity: Row[] = [
-    ...snapshot.entries,
+    ...snapshot.entries.filter(entry => entry.status === "posted"),
     ...snapshot.transfers.map((transfer) => ({ ...transfer, entry_type: "account_transfer" }) as Row),
   ].sort((left, right) => {
     const dateOrder = String(right.occurred_at).localeCompare(String(left.occurred_at));
@@ -130,23 +134,14 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
   const ledgerPage = paginateLedgerRows(filteredActivity, parseLedgerPage(query.ledgerPage), LIST_PAGE_SIZE);
   const spendingCategories = snapshot.spendingCategories.map(spendingDimensionFromRow);
   const spendingProjects = snapshot.spendingProjects.map(spendingDimensionFromRow);
-  const eventById = new Map(events.map((event) => [event.id,event]));
-  const postedEntryIds = new Set(events.filter((event) => event.status === "posted").map((event) => event.id));
-  const reimbursementClaims = snapshot.reimbursementClaims.map((claim) => {
-    const source = eventById.get(String(claim.source_entry_id));
-    if (!source) throw new Error("代付原单缺少来源消费，请核对数据");
-    const settledMinor = snapshot.settlementAllocations
-      .filter((allocation) => allocation.claim_id === claim.id && postedEntryIds.has(String(allocation.settlement_entry_id)))
-      .reduce((sum,allocation) => sum + Number(allocation.amount_minor),0);
-    return reimbursementClaimFromRows(claim,source,settledMinor);
-  });
+  const { claims: reimbursementClaims, batches: settlementBatches, unreviewedPaymentCount } = projectReimbursements(snapshot.reimbursementClaims, snapshot.settlementAllocations, snapshot.settlementBatches, snapshot.proposals, events);
 
   return <AppClient
     household={{ id: householdId, name: household.name, reportingCurrency, ledgerVersion: version }}
     userId={user.id}
     role={membership.role}
     entries={ledgerPage.rows}
-    recentEntries={snapshot.entries.slice(0, LIST_PAGE_SIZE)}
+    recentEntries={snapshot.entries.filter(entry => entry.status === "posted").slice(0, LIST_PAGE_SIZE)}
     proposals={snapshot.proposals}
     investments={snapshot.investments}
     valuations={[]}
@@ -158,9 +153,12 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
     spendingCategories={spendingCategories}
     spendingProjects={spendingProjects}
     reimbursementClaims={reimbursementClaims}
+    settlementBatches={settlementBatches}
+    unreviewedPaymentCount={unreviewedPaymentCount}
+    initialBatchId={typeof query.batch === "string" ? query.batch : undefined}
     ledgerSummary={ledgerSummary}
     postedEntryCount={events.filter((event) => event.status === "posted").length + transfers.filter((transfer) => transfer.status === "posted").length}
-    initialTab={query.tab === "ledger" ? "流水" : "总览"}
+    initialTab={query.tab === "ledger" ? "流水" : query.tab === "reimbursements" ? "代付与报销" : "总览"}
     ledgerPage={ledgerPage.page}
     ledgerPageCount={ledgerPage.pageCount}
     ledgerTotalEntries={filteredActivity.length}

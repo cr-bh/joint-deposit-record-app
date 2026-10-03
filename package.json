@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "vitest run",
+    "test:db": "node scripts/test-db.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -34,8 +35,10 @@
     "@types/node": "^22.15.3",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
+    "embedded-postgres": "^17.9.0-beta.17",
     "eslint": "^9.25.1",
     "eslint-config-next": "^16.3.4",
+    "pg": "^8.23.1",
     "postcss": "^8.5.3",
     "tailwindcss": "^4.1.7",
     "typescript": "^5.8.3",
