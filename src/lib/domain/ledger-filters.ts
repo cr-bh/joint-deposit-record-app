@@ -29,8 +29,8 @@ export function filterLedgerActivity<T extends LedgerRow>(rows: T[], filters: Le
     if (filters.currency && ![entry.currency,entry.destination_currency].includes(filters.currency)) return false;
     if (filters.category && entry.category !== filters.category) return false;
     if (filters.project && entry.project_name !== filters.project) return false;
-    if (filters.payment === "joint" && !["expense","expense_refund"].includes(String(entry.entry_type))) return false;
-    if (filters.payment === "member" && entry.entry_type !== "reimbursement") return false;
+    if (filters.payment === "joint" && !(entry.entry_type === "expense" || (entry.entry_type === "expense_refund" && !entry.payer_member_id))) return false;
+    if (filters.payment === "member" && !(entry.entry_type === "reimbursement" || (entry.entry_type === "expense_refund" && entry.payer_member_id))) return false;
     return true;
   });
 }

@@ -4,9 +4,9 @@ export type Currency = "USD" | "CNY" | "HKD";
 export type CashAccountKind = "bank" | "brokerage";
 // Online identifiers are auth.users UUIDs, never a fixed pair of demo names.
 export type MemberId = string;
-export type LedgerEventType = "opening_balance" | "deposit" | "expense" | "expense_refund" | "reimbursement" | "settlement" | "investment_buy" | "investment_sell" | "dividend";
+export type LedgerEventType = "opening_balance" | "deposit" | "expense" | "expense_refund" | "reimbursement" | "settlement" | "investment_buy" | "investment_sell" | "dividend" | "member_return";
 export type FxRates = Record<Currency, number>;
-export interface LedgerEvent { id: string; type: LedgerEventType; amountMinor: number; currency: Currency; status: "posted" | "voided"; occurredAt: string; createdAt?: string; effectiveSequence?: string; submitterId?: MemberId; payerMemberId?: MemberId; payeeMemberId?: MemberId; memberId?: MemberId; categoryId?: string; category?: string; projectId?: string; project?: string; title?: string; investmentId?: string; quantityMilli?: number; quantityMicro?: number; unitPriceHundredMillionths?: number; unitPriceTenThousandths?: number; accountKind?: CashAccountKind; fxSnapshotId?: string; }
+export interface LedgerEvent { id: string; type: LedgerEventType; amountMinor: number; currency: Currency; status: "posted" | "voided"; occurredAt: string; createdAt?: string; effectiveSequence?: string; submitterId?: MemberId; payerMemberId?: MemberId; payeeMemberId?: MemberId; memberId?: MemberId; categoryId?: string; category?: string; projectId?: string; project?: string; title?: string; investmentId?: string; refundSourceEntryId?: string; refundRecipient?: "member" | "common"; recoveryClaimId?: string; recoveryOriginalMinor?: number; voidProposalId?: string; quantityMilli?: number; quantityMicro?: number; unitPriceHundredMillionths?: number; unitPriceTenThousandths?: number; accountKind?: CashAccountKind; fxSnapshotId?: string; }
 export interface ProposalLike { status: string; payload: Pick<LedgerEvent, "type" | "amountMinor" | "currency" | "memberId" | "payerMemberId" | "payeeMemberId">; }
 export type ReimbursementSummary = { memberId: MemberId; paidMinor: number; reimbursedMinor: number; pendingMinor: number; availableMinor: number; currency: Currency };
 
@@ -19,7 +19,7 @@ export function toReportingMinor(amountMinor: number, currency: Currency, report
   if (result.amountMinor == null) throw new Error(`缺少汇率：${result.missingCurrencies.join(" / ")}`);
   return result.amountMinor;
 }
-export function cashImpact(event: LedgerEvent) { if (event.status !== "posted") return 0; return ["opening_balance", "deposit", "expense_refund", "investment_sell", "dividend"].includes(event.type) ? event.amountMinor : ["expense", "settlement", "investment_buy"].includes(event.type) ? -event.amountMinor : 0; }
+export function cashImpact(event: LedgerEvent) { if (event.status !== "posted" || (event.type === "expense_refund" && event.refundRecipient === "member")) return 0; return ["opening_balance", "deposit", "expense_refund", "investment_sell", "dividend", "member_return"].includes(event.type) ? event.amountMinor : ["expense", "settlement", "investment_buy"].includes(event.type) ? -event.amountMinor : 0; }
 export function cashBalance(events: LedgerEvent[], currency: Currency) { return events.filter((event) => event.currency === currency).reduce((sum, event) => safeInteger(sum + cashImpact(event), "现金余额"), 0); }
 export function cashBalanceReporting(events: LedgerEvent[], reporting: Currency, rates: FxRates) {
   const result = reportBalances({ USD: cashBalance(events, "USD"), CNY: cashBalance(events, "CNY"), HKD: cashBalance(events, "HKD") }, reporting, rates);
@@ -44,7 +44,7 @@ export function holdingMilli(events: LedgerEvent[], investmentId: string, openin
   return calculateInvestmentPosition(events, investmentId, openingQuantityMilli, 0).quantityMilli;
 }
 
-export const eventLabel = (type: LedgerEventType) => ({ opening_balance: "期初余额", deposit: "共同存入", expense: "共同账户消费", expense_refund: "共同消费退款", reimbursement: "成员代付共同消费", settlement: "报销付款", investment_buy: "投资买入", investment_sell: "投资卖出", dividend: "投资分红" })[type];
+export const eventLabel = (type: LedgerEventType) => ({ opening_balance: "期初余额", deposit: "共同存入", expense: "共同账户消费", expense_refund: "共同消费退款", reimbursement: "成员代付共同消费", settlement: "报销付款", investment_buy: "投资买入", investment_sell: "投资卖出", dividend: "投资分红", member_return: "成员退款返还" })[type];
 export function sumByCategory(events: LedgerEvent[], reporting: Currency, rates: FxRates, prefix?: string) { return postedEvents(events).reduce<Record<string, number>>((result, event) => { if (!(["expense", "reimbursement", "expense_refund"].includes(event.type)) || (prefix && !event.occurredAt.startsWith(prefix))) return result; const key = event.category || "其他"; result[key] = (result[key] || 0) + (event.type === "expense_refund" ? -1 : 1) * toReportingMinor(event.amountMinor, event.currency, reporting, rates); return result; }, {}); }
 
 export type ReportingTotal = { amountMinor: number | null; missingCurrencies: Currency[] };

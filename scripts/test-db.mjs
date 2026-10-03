@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
+import {testP6} from './test-p6.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'gongzhu-p4-db-'));
 const port = Number(process.env.GONGZHU_TEST_PG_PORT ?? 55439);
@@ -290,6 +291,7 @@ try {
     await assert.rejects(rpcSubmit(a,{...buyPayload(i),funding:{currency:'USD',amountMinor:10000,destinationAmountMinor:10000,occurredAt:'2026-09-03'}}),/转入日期/);
     await assert.rejects(c.query('select public.submit_proposal($1,$2::jsonb,$3)',[household,JSON.stringify(buyPayload(i)),randomUUID()]),/not authorized/);
   });
+  await testP6({a,b,c,admin,household,userA,claim,request,submit,proposal,rpcSubmit,decide,createInvestment,buyPayload,basisFor,check});
 } finally {
   for (const connection of connections) await connection.end().catch(() => {});
   await database.stop().catch(() => {}); await rm(directory,{recursive:true,force:true});

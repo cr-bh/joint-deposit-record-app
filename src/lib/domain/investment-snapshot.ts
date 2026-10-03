@@ -18,7 +18,7 @@ export function investmentBasis(events: LedgerEvent[], id: string, date: string,
 export function buildInvestmentSnapshot(events: LedgerEvent[], investment: Row, rows: Row[]) {
   const id = String(investment.id), opening = Number(investment.opening_quantity_milli ?? 0), cost = Number(investment.opening_cost_minor ?? 0);
   const position = calculateInvestmentPosition(events, id, opening, cost);
-  let latest = latestValuation(rows.filter(r => r.investment_id === id).map(valuationFromRow));
+  let latest = latestValuation(rows.filter(r => r.investment_id === id && r.status !== "voided").map(valuationFromRow));
   let held = opening * 1000;
   let lastClose: LedgerEvent | undefined;
   for (const event of events.filter(e => e.investmentId === id && e.status === 'posted').sort(compareEvents)) {

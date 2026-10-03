@@ -26,6 +26,8 @@ export default async function PreviewPage({ searchParams }: { searchParams: Prom
     { id: "00000000-0000-4000-8000-000000000802", name: "旧家翻新", archivedAt: "2026-08-31T00:00:00Z", isSystem: false },
   ];
   const entries: Record<string, unknown>[] = [
+    { id: "00000000-0000-4000-8000-000000000211", status: "posted", entry_type: "expense_refund", amount_minor: 10000, currency: "USD", occurred_at: "2026-09-12", created_at: at("2026-09-12", "10:00"), effective_sequence: "14", title: "旅行交通退款给 A", refund_source_entry_id: "00000000-0000-4000-8000-000000000204", refund_recipient: "member", payer_member_id: A, category: "交通", category_id: categoryId("交通"), project_id: PROJECT_TRIP, project_name: "2026 香港旅行" },
+    { id: "00000000-0000-4000-8000-000000000212", status: "posted", entry_type: "member_return", amount_minor: 1000, currency: "USD", occurred_at: "2026-09-13", created_at: at("2026-09-13", "10:00"), effective_sequence: "15", title: "A 返还已多报销部分", recovery_claim_id: "00000000-0000-4000-8000-000000000701", recovery_original_minor: 1000, payer_member_id: A, account_kind: "bank" },
     { id: "00000000-0000-4000-8000-000000000201", status: "posted", entry_type: "deposit", amount_minor: 300000, currency: "USD", occurred_at: "2026-09-01", created_at: at("2026-09-01", "09:00"), effective_sequence: "1", title: "A 九月共同存入", payer_member_id: A, account_kind: "bank" },
     { id: "00000000-0000-4000-8000-000000000202", status: "posted", entry_type: "deposit", amount_minor: 300000, currency: "USD", occurred_at: "2026-09-01", created_at: at("2026-09-01", "09:01"), effective_sequence: "2", title: "B 九月共同存入", payer_member_id: B, account_kind: "bank" },
     { id: "00000000-0000-4000-8000-000000000203", status: "posted", entry_type: "expense", amount_minor: 10000, currency: "USD", occurred_at: "2026-09-02", created_at: at("2026-09-02", "18:00"), effective_sequence: "3", title: "共同晚餐", category_id: categoryId("餐饮"), category: "餐饮", project_id: PROJECT_TRIP, project_name: "2026 香港旅行", account_kind: "bank" },
@@ -47,8 +49,9 @@ export default async function PreviewPage({ searchParams }: { searchParams: Prom
   const accountBalances = accountCashBalances(entries.map(ledgerEventFromRow), cashTransfers);
   const activity = [...entries, ...transfers.map((transfer) => ({ ...transfer, entry_type: transfer.movement_type === "currency_exchange" ? "currency_exchange" : "account_transfer" }))].sort((left, right) => Number(right.effective_sequence ?? 0) - Number(left.effective_sequence ?? 0));
   const ledgerFilters = normalizeLedgerFilters(query);
-  const filteredActivity = filterLedgerActivity(activity,ledgerFilters);
+  const filteredActivity = filterLedgerActivity(activity,ledgerFilters).filter(entry => typeof query.entry !== "string" || entry.id === query.entry);
   const proposals = [
+    { id: "00000000-0000-4000-8000-000000000306", status: "pending_approval", submitter_id: B, payload: { type: "expense_refund", sourceEntryId: "00000000-0000-4000-8000-000000000203", recipient: "common", accountKind: "bank", amountMinor: 2500, currency: "USD", category: "餐饮", project: "2026 香港旅行", title: "晚餐部分退款", occurredAt: "2026-09-14" } },
     { id: "00000000-0000-4000-8000-000000000301", status: "pending_approval", submitter_id: B, payload: { type: "expense", title: "周末采购", amountMinor: 8650, currency: "USD", categoryId: categoryId("购物"), category: "购物", projectId: PROJECT_TRIP, project: "2026 香港旅行", accountKind: "bank" } },
     { id: "00000000-0000-4000-8000-000000000302", status: "overdue_pending", submitter_id: A, payload: { type: "deposit", title: "补录共同存入", amountMinor: 30000, currency: "USD", payerMemberId: B } },
     { id: "00000000-0000-4000-8000-000000000304", status: "pending_approval", submitter_id: B, fx_snapshot_id: FX, payload: { type: "settlement", title: "旅行代付合并报销", amountMinor: 15000, currency: "USD", accountKind: "bank", occurredAt: "2026-09-09", payeeMemberId: B } },
@@ -56,7 +59,7 @@ export default async function PreviewPage({ searchParams }: { searchParams: Prom
   ];
   const approvedProposal = { id: "00000000-0000-4000-8000-000000000305", status: "approved", submitter_id: B, decided_at: at("2026-09-04", "10:00"), payload: { title: "向 A 部分报销", occurredAt: "2026-09-04" } };
   const claimRows = [
-    { id: "00000000-0000-4000-8000-000000000701", source_entry_id: "00000000-0000-4000-8000-000000000204", claimant_id: A, currency: "USD", claimed_minor: 12000, status: "partially_settled", version: 1, created_at: at("2026-09-03", "11:00") },
+    { id: "00000000-0000-4000-8000-000000000701", source_entry_id: "00000000-0000-4000-8000-000000000204", claimant_id: A, currency: "USD", claimed_minor: 12000, status: "settled", version: 2, created_at: at("2026-09-03", "11:00") },
     { id: "00000000-0000-4000-8000-000000000702", source_entry_id: "00000000-0000-4000-8000-000000000209", claimant_id: B, currency: "CNY", claimed_minor: 72000, status: "open", version: 1, created_at: at("2026-09-08", "10:00") },
     { id: "00000000-0000-4000-8000-000000000703", source_entry_id: "00000000-0000-4000-8000-000000000210", claimant_id: B, currency: "HKD", claimed_minor: 78000, status: "open", version: 1, created_at: at("2026-09-08", "11:00") },
   ];
@@ -74,9 +77,9 @@ export default async function PreviewPage({ searchParams }: { searchParams: Prom
     { id: ETF, name: "标普 500 ETF", asset_type: "基金 / ETF", unit_name: "份", valuation_cadence: "weekly", currency: "USD", opening_quantity_milli: 0, opening_cost_minor: 0 },
     { id: FUND, name: "人民币指数基金", asset_type: "基金 / ETF", unit_name: "份", valuation_cadence: "monthly", currency: "CNY", opening_quantity_milli: 0, opening_cost_minor: 0 },
   ];
-  const valuations = [{ id: "00000000-0000-4000-8000-000000000401", investment_id: ETF, value_date: "2026-09-07", created_at: at("2026-09-07", "09:00"), unit_value_minor: 1200, unit_value_1e4: 120000 }];
+  const valuations = [{ id: "00000000-0000-4000-8000-000000000401", investment_id: ETF, currency: "USD", note: "ETF 人工估值", status: "posted", value_date: "2026-09-07", created_at: at("2026-09-07", "09:00"), unit_value_minor: 1200, unit_value_1e4: 120000 }];
   const members = [{ user_id: A, role: "owner", profiles: { display_name: "顾言" } }, { user_id: B, role: "member", profiles: { display_name: "林知夏" } }];
   const fx = fxRateSnapshotFromRow({ id: FX, usd_to_cny: "7.2", usd_to_hkd: "7.8", effective_at: "2026-09-07T10:00:00Z", source_note: "银行 App 参考价，人工录入", created_by: A, approved_by: B, approved_at: "2026-09-14T12:05:00Z" });
   const fxSnapshot = { ...fx, stale: false };
-  return <PreviewClient initialBatchId={typeof query.batch === "string" ? query.batch : undefined} entries={filteredActivity} totalEntries={filteredActivity.length} investmentEntries={entries} transfers={cashTransfers} proposals={proposals} reimbursementClaims={reimbursementClaims} settlementBatches={settlementBatches} investments={investments} valuations={valuations} members={members} accounts={accounts} accountBalances={accountBalances} fxSnapshot={fxSnapshot} rates={ratesFromSnapshot(fx)} spendingCategories={spendingCategories} spendingProjects={spendingProjects} ledgerFilters={ledgerFilters} initialTab={query.tab === "ledger" ? "流水" : query.tab === "investments" ? "投资" : query.tab === "reimbursements" ? "代付与报销" : "总览"}/>;
+  return <PreviewClient key={`${query.tab??"overview"}:${query.entry??""}:${query.batch??""}`} initialBatchId={typeof query.batch === "string" ? query.batch : undefined} entries={filteredActivity} totalEntries={filteredActivity.length} investmentEntries={entries} transfers={cashTransfers} proposals={proposals} reimbursementClaims={reimbursementClaims} settlementBatches={settlementBatches} investments={investments} valuations={valuations} members={members} accounts={accounts} accountBalances={accountBalances} fxSnapshot={fxSnapshot} rates={ratesFromSnapshot(fx)} spendingCategories={spendingCategories} spendingProjects={spendingProjects} ledgerFilters={ledgerFilters} initialTab={query.tab === "ledger" ? "流水" : query.tab === "approvals" ? "审批中心" : query.tab === "investments" ? "投资" : query.tab === "reimbursements" ? "代付与报销" : "总览"}/>;
 }
