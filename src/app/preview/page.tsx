@@ -6,6 +6,9 @@ import { accountCashBalances } from "@/lib/domain/account-balances";
 import { fxRateSnapshotFromRow, ratesFromSnapshot } from "@/lib/domain/fx-rates";
 import { defaultSpendingCategoryNames, type SpendingDimension } from "@/lib/domain/spending-dimensions";
 import { filterLedgerActivity, normalizeLedgerFilters } from "@/lib/domain/ledger-filters";
+import { buildOverviewSummary } from "@/lib/domain/overview-summary";
+import { buildSpendingReport } from "@/lib/domain/spending-report";
+import { buildInvestmentSnapshot } from "@/lib/domain/investment-snapshot";
 import { projectReimbursements } from "@/lib/domain/settlement-batches";
 
 const A = "00000000-0000-4000-8000-000000000001";
@@ -39,6 +42,9 @@ export default async function PreviewPage({ searchParams }: { searchParams: Prom
     { id: "00000000-0000-4000-8000-000000000209", status: "posted", entry_type: "reimbursement", amount_minor: 72000, currency: "CNY", occurred_at: "2026-09-08", created_at: at("2026-09-08", "10:00"), effective_sequence: "12", title: "B 代付旅行住宿", category_id: categoryId("居住"), category: "居住", project_id: PROJECT_TRIP, project_name: "2026 香港旅行", payer_member_id: B, fx_snapshot_id: FX },
     { id: "00000000-0000-4000-8000-000000000210", status: "posted", entry_type: "reimbursement", amount_minor: 78000, currency: "HKD", occurred_at: "2026-09-08", created_at: at("2026-09-08", "11:00"), effective_sequence: "13", title: "B 代付旅行门票", category_id: categoryId("玩乐"), category: "玩乐", project_id: PROJECT_TRIP, project_name: "2026 香港旅行", payer_member_id: B, fx_snapshot_id: FX },
   ];
+  entries.push(
+    { id: "00000000-0000-4000-8000-000000000213", status: "posted", entry_type: "expense_refund", amount_minor: 2500, currency: "USD", occurred_at: "2026-09-15", created_at: at("2026-09-15", "10:00"), effective_sequence: "16", title: "晚餐退款回共同银行", category: "餐饮", project_name: "2026 香港旅行", account_kind: "bank", refund_source_entry_id: "00000000-0000-4000-8000-000000000203", refund_recipient: "common" },
+  );
   const transfers = [
     { id: "00000000-0000-4000-8000-000000000501", status: "posted", amount_minor: 150000, currency: "USD", destination_amount_minor: 150000, destination_currency: "USD", movement_type: "same_currency", occurred_at: "2026-09-04", created_at: at("2026-09-04", "16:00"), effective_sequence: "6", title: "转入券商准备投资", source_account_kind: "bank", destination_account_kind: "brokerage" },
     { id: "00000000-0000-4000-8000-000000000502", status: "posted", amount_minor: 10000, currency: "USD", destination_amount_minor: 72000, destination_currency: "CNY", movement_type: "currency_exchange", fx_snapshot_id: FX, occurred_at: "2026-09-06", created_at: at("2026-09-06", "12:00"), effective_sequence: "9", title: "换成人民币并转入券商", source_account_kind: "bank", destination_account_kind: "brokerage" },
@@ -81,5 +87,9 @@ export default async function PreviewPage({ searchParams }: { searchParams: Prom
   const members = [{ user_id: A, role: "owner", profiles: { display_name: "顾言" } }, { user_id: B, role: "member", profiles: { display_name: "林知夏" } }];
   const fx = fxRateSnapshotFromRow({ id: FX, usd_to_cny: "7.2", usd_to_hkd: "7.8", effective_at: "2026-09-07T10:00:00Z", source_note: "银行 App 参考价，人工录入", created_by: A, approved_by: B, approved_at: "2026-09-14T12:05:00Z" });
   const fxSnapshot = { ...fx, stale: false };
-  return <PreviewClient key={`${query.tab??"overview"}:${query.entry??""}:${query.batch??""}`} initialBatchId={typeof query.batch === "string" ? query.batch : undefined} entries={filteredActivity} totalEntries={filteredActivity.length} investmentEntries={entries} transfers={cashTransfers} proposals={proposals} reimbursementClaims={reimbursementClaims} settlementBatches={settlementBatches} investments={investments} valuations={valuations} members={members} accounts={accounts} accountBalances={accountBalances} fxSnapshot={fxSnapshot} rates={ratesFromSnapshot(fx)} spendingCategories={spendingCategories} spendingProjects={spendingProjects} ledgerFilters={ledgerFilters} initialTab={query.tab === "ledger" ? "流水" : query.tab === "approvals" ? "审批中心" : query.tab === "investments" ? "投资" : query.tab === "reimbursements" ? "代付与报销" : "总览"}/>;
+  const events = entries.map(ledgerEventFromRow);
+  const investmentSnapshots = Object.fromEntries(investments.map(investment => [investment.id, buildInvestmentSnapshot(events, investment, valuations)]));
+  const overviewSummary = buildOverviewSummary(accountBalances, investments, investmentSnapshots, reimbursementClaims, "USD", fx);
+  const spendingReport = buildSpendingReport(events, "USD", { [FX]: ratesFromSnapshot(fx) }, ledgerFilters, { [A]: "顾言", [B]: "林知夏" });
+  return <PreviewClient overviewSummary={overviewSummary} spendingReport={spendingReport} key={`${query.tab??"overview"}:${query.entry??""}:${query.batch??""}`} initialBatchId={typeof query.batch === "string" ? query.batch : undefined} entries={filteredActivity} totalEntries={filteredActivity.length} investmentEntries={entries} transfers={cashTransfers} proposals={proposals} reimbursementClaims={reimbursementClaims} settlementBatches={settlementBatches} investments={investments} valuations={valuations} members={members} accounts={accounts} accountBalances={accountBalances} fxSnapshot={fxSnapshot} rates={ratesFromSnapshot(fx)} spendingCategories={spendingCategories} spendingProjects={spendingProjects} ledgerFilters={ledgerFilters} initialTab={query.tab === "ledger" ? "流水" : query.tab === "approvals" ? "审批中心" : query.tab === "investments" ? "投资" : query.tab === "reimbursements" ? "代付与报销" : "总览"}/>;
 }
