@@ -1,4 +1,6 @@
 "use client";
+import { useLedgerTimeZone } from "./ledger-clock";
+import { ledgerToday } from "@/lib/domain/ledger-time";
 import { useEffect, useState } from 'react';
 import { parseFixedDecimal } from '@/lib/domain/fixed-decimal';
 import { ledgerEventFromRow } from '@/lib/domain/ledger-adapter';
@@ -8,10 +10,10 @@ import type { AccountBalances, CashTransfer } from '@/lib/domain/account-balance
 type Row=Record<string,unknown>;
 const emptyRows:Row[]=[];
 type Basis={quantityMicro:number;throughSequence:string;revision:number;signature:string};
-const today=()=>new Date().toISOString().slice(0,10);
 const money=(n:number,c:string)=>`${c} ${(n/100).toFixed(2)}`;
 function Shell({title,close,children}:{title:string;close:()=>void;children:React.ReactNode}){return <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"><div role="dialog" aria-modal="true" aria-label={title} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6"><div className="mb-4 flex justify-between"><b>{title}</b><button type="button" aria-label="关闭" onClick={close}>×</button></div><div className="[&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:p-3 [&_select]:w-full [&_select]:rounded-xl [&_select]:border [&_select]:p-3 [&_textarea]:w-full [&_textarea]:rounded-xl [&_textarea]:border [&_textarea]:p-3">{children}</div></div></div>;}
 export function InvestmentActionModal({investment,householdId,close,refresh,notify,readOnly=false,entries=emptyRows,transfers=[],balances}: {investment:Row;householdId:string;close:()=>void;refresh:()=>void;notify:(s:string)=>void;readOnly?:boolean;entries?:Row[];transfers?:CashTransfer[];balances?:AccountBalances}) {
+ const timeZone=useLedgerTimeZone(); const today=()=>ledgerToday(timeZone);
  const [type,setType]=useState('investment_buy'),[date,setDate]=useState(today()),[title,setTitle]=useState(''),[amount,setAmount]=useState(''),[quantity,setQuantity]=useState(''),[price,setPrice]=useState(''),[fundingMode,setFundingMode]=useState('cash'),[fundingCurrency,setFundingCurrency]=useState(String(investment.currency)),[fundingAmount,setFundingAmount]=useState(''),[arrival,setArrival]=useState(''),[transferDate,setTransferDate]=useState(today()),[linkedTransfer,setLinkedTransfer]=useState(''),[valuationMode,setValuationMode]=useState('total_market'),[valuationValue,setValuationValue]=useState(''),[basisState,setBasisState]=useState<{key:string;basis?:Basis;error?:string}>({key:''}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[requestKey]=useState(()=>globalThis.crypto.randomUUID());
  const id=String(investment.id),currency=String(investment.currency),basisKey=`${id}:${date}`;
  let previewBasis:Basis|undefined,previewBasisError='';

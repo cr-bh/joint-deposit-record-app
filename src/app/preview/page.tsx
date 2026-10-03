@@ -1,3 +1,4 @@
+import { managementPlanSchema } from "@/lib/domain/household-management";
 import { buildLedgerRecordStates } from "@/lib/domain/ledger-record-states";
 import { notFound } from "next/navigation";
 import PreviewClient from "./preview-client";
@@ -23,6 +24,7 @@ const at = (day: string, minute: string) => `${day}T${minute}:00Z`;
 export default async function PreviewPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   if (process.env.NODE_ENV !== "development") notFound();
   const query = await searchParams;
+  const archived = query.state === "archived";
   const spendingCategories: SpendingDimension[] = defaultSpendingCategoryNames.map((name, index) => ({ id: `00000000-0000-4000-8000-${String(900 + index).padStart(12, "0")}`, name, isSystem: true }));
   const categoryId = (name: string) => spendingCategories.find((item) => item.name === name)!.id;
   const spendingProjects: SpendingDimension[] = [
@@ -79,7 +81,7 @@ export default async function PreviewPage({ searchParams }: { searchParams: Prom
     { id: "00000000-0000-4000-8000-000000001102", household_id: "00000000-0000-4000-8000-000000000010", batch_id: batchRows[1].id, claim_id: claimRows[1].id, settlement_entry_id: null, amount_minor: 36000, payment_minor: 5000, claim_version: 1, status: "reserved", created_at: batchRows[1].created_at },
     { id: "00000000-0000-4000-8000-000000001103", household_id: "00000000-0000-4000-8000-000000000010", batch_id: batchRows[1].id, claim_id: claimRows[2].id, settlement_entry_id: null, amount_minor: 78000, payment_minor: 10000, claim_version: 1, status: "reserved", created_at: batchRows[1].created_at },
   ];
-  const { claims: reimbursementClaims, batches: settlementBatches } = projectReimbursements(claimRows, allocationRows, batchRows, [...proposals, approvedProposal], entries.map(ledgerEventFromRow));
+  const { claims: reimbursementClaims, batches: settlementBatches } = projectReimbursements(claimRows, archived ? allocationRows.filter(r => r.status !== "reserved") : allocationRows, archived ? batchRows.filter(r => r.status !== "reserved") : batchRows, archived ? [approvedProposal] : [...proposals, approvedProposal], entries.map(ledgerEventFromRow));
   const investments = [
     { id: ETF, name: "标普 500 ETF", asset_type: "基金 / ETF", unit_name: "份", valuation_cadence: "weekly", currency: "USD", opening_quantity_milli: 0, opening_cost_minor: 0 },
     { id: FUND, name: "人民币指数基金", asset_type: "基金 / ETF", unit_name: "份", valuation_cadence: "monthly", currency: "CNY", opening_quantity_milli: 0, opening_cost_minor: 0 },
@@ -92,5 +94,19 @@ export default async function PreviewPage({ searchParams }: { searchParams: Prom
   const investmentSnapshots = Object.fromEntries(investments.map(investment => [investment.id, buildInvestmentSnapshot(events, investment, valuations)]));
   const overviewSummary = buildOverviewSummary(accountBalances, investments, investmentSnapshots, reimbursementClaims, "USD", fx);
   const spendingReport = buildSpendingReport(events, "USD", { [FX]: ratesFromSnapshot(fx) }, ledgerFilters, { [A]: "顾言", [B]: "林知夏" });
-  return <PreviewClient ledgerRecordStates={buildLedgerRecordStates(entries.map(ledgerEventFromRow), proposals, reimbursementClaims, activity.map(row => ({ id: String(row.id), status: String(row.status) })))} overviewSummary={overviewSummary} spendingReport={spendingReport} key={`${query.tab??"overview"}:${query.entry??""}:${query.batch??""}`} initialBatchId={typeof query.batch === "string" ? query.batch : undefined} entries={filteredActivity} totalEntries={filteredActivity.length} investmentEntries={entries} transfers={cashTransfers} proposals={proposals} reimbursementClaims={reimbursementClaims} settlementBatches={settlementBatches} investments={investments} valuations={valuations} members={members} accounts={accounts} accountBalances={accountBalances} fxSnapshot={fxSnapshot} rates={ratesFromSnapshot(fx)} spendingCategories={spendingCategories} spendingProjects={spendingProjects} ledgerFilters={ledgerFilters} initialTab={query.tab === "ledger" ? "流水" : query.tab === "approvals" ? "审批中心" : query.tab === "investments" ? "投资" : query.tab === "reimbursements" ? "代付与报销" : "总览"}/>;
+  const frozenDemo = {
+    configuration: { name: "共筑生活账本", reporting_currency: "USD", time_zone: "Asia/Hong_Kong", time_zone_confirmed: true, status: "active" },
+    capturedAt: "2026-09-15T12:00:00Z", currentFxId: FX, entries, transfers, members, accounts, investments, valuations,
+    fxSnapshots: [{ id: FX, usd_to_cny: "7.2", usd_to_hkd: "7.8", effective_at: fx.effectiveAt, source_note: fx.sourceNote, created_by: A, approved_by: B, approved_at: fx.approvedAt }],
+    proposals: archived ? [approvedProposal] : [...proposals,approvedProposal], reimbursementClaims: claimRows,
+    settlementAllocations: archived ? allocationRows.filter(r => r.status !== "reserved") : allocationRows,
+    settlementBatches: archived ? batchRows.filter(r => r.status !== "reserved") : batchRows,
+    spendingCategories: spendingCategories.map(d => ({ id: d.id, name: d.name, is_system: d.isSystem, archived_at: d.archivedAt ?? null })),
+    spendingProjects: spendingProjects.map(d => ({ id: d.id, name: d.name, archived_at: d.archivedAt ?? null })), voidRequests: [],
+  };
+  const managementPlan = managementPlanSchema.parse({status: archived ? "archived" : "active", version: archived ? 902 : 900, snapshot: frozenDemo,
+    blockers: archived ? ["已有恢复申请待审批，可在审批中心查看"] : [`还有 ${proposals.length} 笔待审批事项`,`还有 ${allocationRows.filter(r => r.status === "reserved").length} 项有效预留`],
+    migrationIssues: [], pendingCount: archived ? 1 : proposals.length, reservationCount: archived ? 0 : allocationRows.filter(r => r.status === "reserved").length, archivedAt: archived ? "2026-09-15T12:10:00Z" : null });
+  const displayProposals = archived ? [{ id: "00000000-0000-4000-8000-000000000307", status: "pending_approval", submitter_id: B, payload: { type: "household_restore", title: "恢复共同账本", reason: "双方同意继续记录，未清往来继续保留", amountMinor: 0, currency: "USD", occurredAt: "2026-09-15", reviewSnapshot: frozenDemo } }] : proposals;
+  return <PreviewClient archived={archived} managementPlan={managementPlan} ledgerRecordStates={buildLedgerRecordStates(entries.map(ledgerEventFromRow), displayProposals, reimbursementClaims, activity.map(row => ({ id: String(row.id), status: String(row.status) })))} overviewSummary={overviewSummary} spendingReport={spendingReport} key={`${archived}:${query.tab??"overview"}:${query.entry??""}:${query.batch??""}`} initialBatchId={typeof query.batch === "string" ? query.batch : undefined} entries={filteredActivity} totalEntries={filteredActivity.length} investmentEntries={entries} transfers={cashTransfers} proposals={displayProposals} reimbursementClaims={reimbursementClaims} settlementBatches={settlementBatches} investments={investments} valuations={valuations} members={members} accounts={accounts} accountBalances={accountBalances} fxSnapshot={fxSnapshot} rates={ratesFromSnapshot(fx)} spendingCategories={spendingCategories} spendingProjects={spendingProjects} ledgerFilters={ledgerFilters} initialTab={query.tab === "ledger" ? "流水" : query.tab === "approvals" ? "审批中心" : query.tab === "investments" ? "投资" : query.tab === "reimbursements" ? "代付与报销" : "总览"}/>;
 }

@@ -1,3 +1,4 @@
+import { frozenLedgerSchema } from "@/lib/domain/household-management";
 import { buildLedgerRecordStates } from "@/lib/domain/ledger-record-states";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -42,8 +43,8 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
     return version;
   };
 
-  const { version, snapshot } = await readConsistentSnapshot(readVersion, async () => {
-    const { data: configuration, error: configurationError } = await supabase.from("households").select("id,name,reporting_currency").eq("id", householdId).single();
+  const { version, snapshot: liveSnapshot } = await readConsistentSnapshot(readVersion, async () => {
+    const { data: configuration, error: configurationError } = await supabase.from("households").select("id,name,reporting_currency,time_zone,time_zone_confirmed,status,archived_at,archive_snapshot_id").eq("id", householdId).single();
     if (configurationError || !configuration) throw new Error("账本配置读取失败，请重试");
     const [entries, proposals, investments, valuations, members, accounts, transfers, fxSnapshots, spendingCategories, spendingProjects, reimbursementClaims, settlementAllocations, settlementBatches, voidRequests] = await Promise.all([
       fetchAllPages<Row>(async (from, to) => {
@@ -106,13 +107,27 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
     return { configuration, entries, proposals, investments, valuations, members, accounts, transfers, fxSnapshots, spendingCategories, spendingProjects, reimbursementClaims, settlementAllocations, settlementBatches, voidRequests };
   });
 
+  let snapshot = liveSnapshot;
+  let valuationTime: string | undefined;
+  if (liveSnapshot.configuration.status === "archived" && liveSnapshot.configuration.archive_snapshot_id) {
+    const { data, error } = await supabase.from("household_archives").select("snapshot").eq("id",liveSnapshot.configuration.archive_snapshot_id).eq("household_id",householdId).single();
+    if (error || !data) throw new Error("归档快照读取失败，请重试");
+    const frozen = frozenLedgerSchema.parse(data.snapshot);
+    valuationTime = frozen.capturedAt;
+    const { configuration, capturedAt: _capturedAt, ...rows } = frozen;
+    void _capturedAt;
+    snapshot = { ...liveSnapshot, ...rows,
+      proposals: [...frozen.proposals, ...liveSnapshot.proposals.filter(p => ["household_archive","household_restore"].includes(String((p.payload as Row).type)))],
+      configuration: { ...liveSnapshot.configuration, name: configuration.name, reporting_currency: configuration.reporting_currency, time_zone: configuration.time_zone, time_zone_confirmed: configuration.time_zone_confirmed } };
+  }
+
   const events = snapshot.entries.map(ledgerEventFromRow);
   const transfers = snapshot.transfers.map(cashTransferFromRow);
   const accountBalances = accountCashBalances(events, transfers);
   const combinedBalances = combinedCashBalances(accountBalances);
   const reportingCurrency = snapshot.configuration.reporting_currency as Currency;
   const fxSnapshots = snapshot.fxSnapshots.map(fxRateSnapshotFromRow);
-  const currentFxSnapshot = latestEffectiveFxSnapshot(fxSnapshots);
+  const currentFxSnapshot = latestEffectiveFxSnapshot(fxSnapshots,valuationTime ?? new Date());
   const historicalRates = Object.fromEntries(fxSnapshots.map((fxSnapshot) => [fxSnapshot.id, ratesFromSnapshot(fxSnapshot)]));
   const ledgerSummary = summarizeLedger(events, reportingCurrency, ratesFromSnapshot(currentFxSnapshot), transfers, historicalRates);
   if ((["USD", "CNY", "HKD"] as Currency[]).some((currency) => combinedBalances[currency] !== ledgerSummary.cashByCurrency[currency])) {
@@ -144,6 +159,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
   const { claims: reimbursementClaims, batches: settlementBatches, unreviewedPaymentCount } = projectReimbursements(snapshot.reimbursementClaims, snapshot.settlementAllocations, snapshot.settlementBatches, snapshot.proposals, events);
 
   const overviewSummary = buildOverviewSummary(accountBalances, snapshot.investments, investmentSnapshots, reimbursementClaims, reportingCurrency, currentFxSnapshot, unreviewedPaymentCount, events.filter(e => e.type === "reimbursement" && e.status === "posted" && !reimbursementClaims.some(c => c.sourceEntryId === e.id)).length);
+  if (snapshot.configuration.status === "archived" && !snapshot.configuration.archive_snapshot_id) { overviewSummary.assetsMinor = null; overviewSummary.netMinor = null; overviewSummary.issues.push("历史归档缺冻结快照，资产待核对；可申请双人恢复后核对。"); }
   const memberNames = Object.fromEntries(snapshot.members.map(member => {
     const profile = Array.isArray(member.profiles) ? member.profiles[0] : member.profiles;
     return [String(member.user_id), String((profile as Row | null)?.display_name ?? `成员 ${String(member.user_id).slice(0,8)}`)];
@@ -153,11 +169,11 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
   return <AppClient
     ledgerRecordStates={buildLedgerRecordStates(events, snapshot.proposals, reimbursementClaims, activity.map(row => ({ id: String(row.id), status: String(row.status), proposalId: typeof row.proposal_id === "string" ? row.proposal_id : undefined })))}
     key={`${query.tab ?? "overview"}:${query.entry ?? ""}:${query.batch ?? ""}`}
-    household={{ id: householdId, name: snapshot.configuration.name, reportingCurrency, ledgerVersion: version }}
+    household={{ id: householdId, name: snapshot.configuration.name, reportingCurrency, ledgerVersion: version, timeZone: snapshot.configuration.time_zone, timeZoneConfirmed: snapshot.configuration.time_zone_confirmed, status: snapshot.configuration.status, archivedAt: snapshot.configuration.archived_at ?? undefined, hasArchiveSnapshot: Boolean(snapshot.configuration.archive_snapshot_id) }}
     userId={user.id}
     role={membership.role}
     entries={ledgerPage.rows}
-    recentEntries={snapshot.entries.filter(entry => entry.status === "posted").slice(0, LIST_PAGE_SIZE)}
+    recentEntries={snapshot.entries.filter(entry => entry.status === "posted").sort((a,b) => String(b.occurred_at).localeCompare(String(a.occurred_at)) || String(b.effective_sequence).localeCompare(String(a.effective_sequence),undefined,{numeric:true}) || String(b.id).localeCompare(String(a.id))).slice(0, LIST_PAGE_SIZE)}
     proposals={snapshot.proposals.map(p => ({...p, replacement_proposal_id: snapshot.voidRequests.find(v => v.proposal_id === p.id)?.replacement_proposal_id, replaces_void_proposal_id: snapshot.voidRequests.find(v => v.replacement_proposal_id === p.id)?.proposal_id}))}
     investments={snapshot.investments}
     valuations={snapshot.valuations}

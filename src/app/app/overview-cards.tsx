@@ -1,10 +1,14 @@
+"use client";
+import { useLedgerTimeZone } from "./ledger-clock";
+import { ledgerTimestamp } from "@/lib/domain/ledger-time";
 import type { OverviewSummary } from "@/lib/domain/overview-summary";
 
 const money = (minor: number, currency: string) => `${currency} ${new Intl.NumberFormat("en-US", { style: "currency", currency }).format(minor / 100)}`;
 
 export default function OverviewCards({ summary, currency, fxTime, version, pendingCount }: { summary: OverviewSummary; currency: string; fxTime?: string; version?: number; pendingCount: number }) {
+  const timeZone = useLedgerTimeZone();
   const value = (amount: number | null) => amount === null ? "待核对 / 待完善汇率" : money(amount, currency);
-  const when = fxTime ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(fxTime)) + "（UTC）" : "尚无已批准快照；同币种金额可直接核算";
+  const when = fxTime ? ledgerTimestamp(fxTime,timeZone) + `（${timeZone}）` : "尚无已批准快照；同币种金额可直接核算";
   return <div className="space-y-4">
     <p className="text-xs leading-5 text-gray-500">当前全部账本资产{version == null ? "" : ` · 账本版本 ${version}`} · 汇率更新时间：{when}</p>
     <div className="grid gap-4 md:grid-cols-3">{[["共同现金", summary.cashMinor], ["共同投资资产", summary.investmentMinor], ["共同资产总额", summary.assetsMinor]].map(([label, amount]) => <section key={String(label)} className="rounded-2xl border bg-white p-5"><p className="text-xs text-gray-500">{label}</p><p className="mt-3 break-words text-2xl font-bold">{value(amount as number | null)}</p><p className="mt-2 text-xs text-gray-500">{label === "共同投资资产" ? summary.estimated ? "包含成本暂估 · 部分标的待估值" : "仅已持有标的市值" : label === "共同现金" ? "银行现金 + 券商未投资现金" : "共同现金 + 共同投资资产"}</p></section>)}</div>

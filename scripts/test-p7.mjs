@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
 // Execute the same production domain functions against actual authenticated PostgreSQL RPC output.
-async function loadDomain() {
+export async function loadDomain() {
   const directory = await mkdtemp(join(process.cwd(), '.p7-runtime-'));
   try {
     const source = new URL('../src/lib/domain/', import.meta.url);
@@ -15,7 +15,7 @@ async function loadDomain() {
       const resolved = compiled.replace(/from (["'])@\/lib\/domain\/([^"']+)\1/g, 'from "$2.mjs"').replace(/from (["'])(\.\/[^"']+)\1/g, 'from "$2.mjs"').replace(/from (["'])([^./][^"']*\.mjs)\1/g, 'from "./$2"');
       await writeFile(join(directory, file.replace(/\.ts$/, '.mjs')), resolved);
     }
-    const names = ['ledger-adapter', 'account-adapter', 'account-balances', 'investment-snapshot', 'overview-summary', 'spending-report', 'settlement-batches', 'fx-rates', 'ledger-filters'];
+    const names = ['ledger-adapter', 'account-adapter', 'account-balances', 'investment-snapshot', 'overview-summary', 'spending-report', 'settlement-batches', 'fx-rates', 'ledger-filters', 'household-management'];
     const modules = await Promise.all(names.map(n => import(pathToFileURL(join(directory, n + '.mjs')).href)));
     return { directory, ...Object.assign({}, ...modules) };
   } catch (error) { await rm(directory, { recursive: true, force: true }); throw error; }
