@@ -2,7 +2,7 @@
 
 更新：2026-10-04。交付范围：**NewNiu 新账本发布候选**；用户确认第一批通过，后续两批合并交付；暂不搬迁旧数据。以下80个编号沿用原计划，不代表80条真实用户端到端用例全部通过。
 
-本地最终检查：**226/226 应用测试，19份迁移，62组 PostgreSQL 检查，类型、ESLint和webpack生产构建通过**。测试使用实际SQL/RLS/锁/事务，Auth身份以声明模拟。云端 `gongzhu-staging` 安装19份迁移后已执行回滚型业务探针：PRD435、跨币报销/退款返还、作废、归档/恢复、幂等和越权检查通过，结果确认测试记录已回滚。它使用现有成员身份声明，不声称完成真实Auth浏览器E2E。
+本地及[Node22 CI](https://github.com/cr-bh/joint-deposit-record-app/actions/runs/37179893325)最终检查：**226/226 应用测试，19份迁移，62组 PostgreSQL 检查，类型、ESLint和webpack生产构建通过**。测试使用实际SQL/RLS/锁/事务，Auth身份以声明模拟。云端 `gongzhu-staging` 安装19份迁移后已执行回滚型业务探针：PRD435、跨币报销/退款返还、作废、归档/恢复、幂等和越权检查通过，结果确认测试记录已回滚。它使用现有成员身份声明，不声称完成真实Auth浏览器E2E。
 
 “自动通过”指所列领域/数据库检查通过；界面、邮件、不同设备使用需要对应人工证据。没有将缺少的旧数据写入迁移工具标为完成。完整历史迁移PR-16（双人事实修订、期初落库、切换日前更正）尚未实现，本次明确不交付；只读盘点与计算预演已提供。
 
@@ -90,3 +90,5 @@
 | AC-80 | 两个独立登录用户完整流程与移动端 | 云端 RPC/RLS 通过；最终人工待执行 | [staging-business-probe.sql](../../scripts/staging-business-probe.sql)、[FINAL-ACCEPTANCE.md](FINAL-ACCEPTANCE.md)。注册/邮件/双人加入由用户确认通过。真实独立Auth会话的完整金额闭环、手机、断网及双方归档恢复由最后一次人工验收确认。 |
 
 发布状态与部署证据见 [CURRENT-STATUS.md](CURRENT-STATUS.md)；最后一次双人验收见 [FINAL-ACCEPTANCE.md](FINAL-ACCEPTANCE.md)；备份、迁移和故障处置见 [OPERATIONS-RUNBOOK.md](OPERATIONS-RUNBOOK.md)。
+
+最新手机合成预览：[管理](screenshots/final-management-mobile.png)、[审批](screenshots/final-approvals-mobile.png)、[投资](screenshots/final-investments-mobile.png)。线上真实账号只读页面、完整表结构健康、未登录限制及部署版本已核对；最终两人资金操作仍待人工。

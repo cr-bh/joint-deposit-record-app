@@ -1,5 +1,14 @@
 # HTTPS 测试站部署与跨设备第一批验收
 
+## 2026-10-04 NewNiu 最终候选上线
+
+用户确认第一批通过，后续两批合并最终交付；不搬迁旧历史。代码提交 `b695e35139dfb6bde206cc4368dfdd2a1671240e` 已推送 cr-bh 的 `codex/gongzhu-v1.1-p1`。Vercel部署 `H7iAbVmicSdJXUCmnSUwRfP9n4Fh` 为 Ready，Source指向此提交，稳定域名 `joint-deposit-record-app-beta.vercel.app` 已指向新部署。Node22构建时长1m11s。证据：[Ready部署](screenshots/final-deployment-ready.png)。
+
+隔离Supabase已安装19份迁移，最新账本状态Realtime发布项与RLS核对通过；回滚型云端资金业务探针通过，结果确认临时记录已回滚。证据：[publication/RLS](screenshots/final-realtime-migration.png)、[云端RPC/RLS业务检查](screenshots/final-cloud-probe.png)。只读18组业务字段访问返回200。探针使用成员身份声明，真实双人Auth业务闭环仍待最终人工。
+
+本地226测试、19迁移/62数据库组、类型/lint/构建通过。CI及新版页面最终检查结果见 [CURRENT-STATUS.md](CURRENT-STATUS.md)。最后一次验收见 [FINAL-ACCEPTANCE.md](FINAL-ACCEPTANCE.md)。下方为早期安装/部署历史，等待第一批的文字已由本节更新。
+
+
 更新：2026-10-04 America/New_York。状态：独立HTTPS测试站部署完成，连接与未登录访问检查通过；第一批等待人工双人加入/会话验收，不推进第二批。
 
 ## 当前部署
