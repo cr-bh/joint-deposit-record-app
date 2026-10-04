@@ -1,31 +1,46 @@
 # HTTPS 测试站部署与跨设备第一批验收
 
-更新：2026-10-03 America/New_York。状态：用户已选择部署独立HTTPS测试站；配置准备完成；用户补充原项目曾有联网站点，原公开仓库API的homepage已确认 https://joint-deposit-record-app.vercel.app，平台Vercel；尚待用户确认这是原站点并明确部署项目访问权限，再决定复用托管账号还是新增Vercel项目。尚未部署，没有可交付公网URL。
+更新：2026-10-03 America/New_York。状态：独立HTTPS测试站部署完成，连接与未登录访问检查通过；第一批等待人工双人加入/会话验收，不推进第二批。
 
-## 候选部署对象（Vercel，项目访问权限待确认）
+## 当前部署
 
-- 用户仓库 `cr-bh/joint-deposit-record-app`，分支 `codex/gongzhu-v1.1-p1`；不从旧main分支部署。
-- 独立Vercel项目候选名称 `gongzhu-staging`，个人免费方案；Node.js 22，Next.js，仓库根目录。`vercel.json`固定 `npm ci` 与已验证的webpack构建。
-- 继续连接现有隔离Supabase `gongzhu-staging` / `yzpkdhlkhhlhgmnsdkgd`。已有真实测试账号和用户创建的空账本继续使用；不重建或重跑数据库安装。
-- Vercel运行环境中配置 `.env.example` 中的 `NEXT_PUBLIC_SUPABASE_URL` 和 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`。值来自被忽略的本地配置；只传公开客户端连接配置，不传数据库密码、Gmail应用密码或service_role。环境配置必须在构建前生效。
-- 此项目的稳定HTTPS域名作为测试入口。它仍是隔离验收环境，即使Vercel将稳定域名所属环境命名为Production，也不代表v1.1正式发布。
+| 项目 | 配置 |
+|---|---|
+| 稳定登录入口 | https://joint-deposit-record-app-beta.vercel.app/login |
+| Vercel账号/项目 | Ariel / ariel-b0c2 / joint-deposit-record-app |
+| 用户仓库 | cr-bh/joint-deposit-record-app |
+| Production分支追踪 | codex/gongzhu-v1.1-p1 |
+| 本次验收部署 | 982710d020c81fea36268a547877dda45546964c；JBDnHkSQ8dBrZv1dNRfZw3K945Ug |
+| 构建 | Ready；Next.js，仓库根目录，Node22.x；vercel.json固定npm ci及webpack构建 |
+| 数据库 | 隔离gongzhu-staging / yzpkdhlkhhlhgmnsdkgd；复用现有测试账号与空账本 |
 
-## 外部账号当前阻塞
+用户先在自己的Ariel项目部署了旧main / 8388535，且未设置环境变量。本次保留该项目与稳定域名，改分支、设置两项公开客户端Supabase变量并重新部署；没有删除项目。Vercel的Production名称只表示此独立项目的稳定域名环境，不代表v1.1正式发布。
 
-用户截图已确认旧项目位于James个人Hobby账号，连接 `JamessssLi/joint-deposit-record-app` 的main / 3890578；不删除旧项目。截图管理页面不在当前可操作的Chrome标签中。最新仓库属于cr-bh；[Vercel个人仓库导入要求仓库Owner](https://vercel.com/docs/git/vercel-for-github#missing-git-repository)，推荐用户自己的Vercel账号连接cr-bh。已询问选择自己账号还是伴侣先同步代码后部署；不擅自改写上游仓库。
+环境变量为NEXT_PUBLIC_SUPABASE_URL、NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY，来源为忽略提交的本地配置；未上传数据库密码、Gmail应用密码或service_role。后续开发分支推送会自动更新此测试站。
 
-已核对原公开仓库homepage为 `https://joint-deposit-record-app.vercel.app`，用户确认托管平台为Vercel；本次浏览器访问返回504 / MIDDLEWARE_INVOCATION_TIMEOUT。未读取原部署日志、修改原站点或确认其数据库，不据此猜测故障来源。等待用户或伴侣在已打开的Vercel页面登录可用账号，然后新增连接当前隔离测试库的测试项目。
+## 认证配置与验证
 
-Vercel页面未登录；自动审批拒绝点击Continue with GitHub，理由是第三方OAuth可能申请账号/仓库访问且具体范围尚未确认。没有绕过或安装其他连接器。由用户亲自完成Vercel登录；首次使用时由用户确认条款。若安装GitHub应用，仅授权此用户仓库，具体页面权限需人工审阅。
+Supabase Site URL：`https://joint-deposit-record-app-beta.vercel.app`。回调白名单：
 
-## 部署后接通与核对
+- `https://joint-deposit-record-app-beta.vercel.app/auth/callback**`
+- `http://127.0.0.1:3000/auth/callback**`
+- `http://localhost:3000/auth/callback**`
 
-1. 使用当前开发分支创建部署，检查成功构建的提交与环境连接配置。设置此独立测试项目的部署分支，避免推旧main替换测试版本。
-2. 取得实际稳定HTTPS域名后，在测试Supabase将Site URL设为该域名、追加其 `/auth/callback**`；保留已有本地回调。不要使用尚未分配的域名或所有站点通配。
-3. 未登录访问应回登录；受保护API应返回JSON401；连接检查应就绪。公开页面不返回账本内容。
-4. 成员A用已有共筑账号从HTTPS站登录，核对同一账本、时区、1/2成员及空资产。无需重建或重新注册A。
-5. 从HTTPS站生成邀请。成员B在自己的设备打开，通过自己的邮箱注册、在同一浏览器确认邮件并返回邀请加入。第一批检查同账本2/2、独立会话和退出重登；完成后停下人工交付，不直接进入第二批资金流程。
-6. 已生成邀请保存在数据库，部署本身不使它失效；只有URL来源需换成实际HTTPS域名。不要在公开文档、截图或日志记录完整邀请token。
+实际线上浏览器登录页正常；浏览器与HTTP `/api/setup/check` 均返回Auth/基础表正常、邮箱确认开启。未登录 `/app` 返回307至 `/login?next=%2Fapp`；`/api/households` 返回JSON401。检查不发送邮件、不读取资金，不能替代真实双人登录与业务验收。证据：[HTTPS连接检查](screenshots/batch1-https-connection-ready.png)。
+
+## 第一批人工接续
+
+1. A使用已有共筑账号从上述HTTPS入口登录，核对原NewNiu账本、报告币种、America/New_York时区、1/2成员及空资产；不要重新注册A或重建账本。
+2. A从HTTPS站生成邀请，自行分享给B；应用不自动发送邀请邮件。邀请链接应以此HTTPS域名开头。
+3. B在自己的设备用独立邮箱注册，并在注册时同一个浏览器确认邮件，返回邀请加入A账本；B不另建账本。
+4. 双方核对2/2成员、账号名称、刷新/退出重登和会话互不影响。第一批通过后再开始第二批资金流程和Realtime。
+5. 已生成的数据库邀请不因部署失效；本地URL需要换成实际HTTPS域名。不要在公开文档、截图或日志保存完整邀请token。
+
+## 原站点与账号历史
+
+原站点 `https://joint-deposit-record-app.vercel.app` 位于James个人Hobby账号，连接JamessssLi旧仓库main / 3890578；此前访问504 / MIDDLEWARE_INVOCATION_TIMEOUT，未核查日志、不猜故障来源。本次没有修改或删除原站点，也没有连接旧数据库。
+
+此前代点Vercel GitHub OAuth被自动审批拒绝，具体仓库权限未确认；后由用户亲自登录自己的Ariel账号。现已完成此独立项目部署，登录阻塞解除。
 
 ## 本地地址限制与界面修复
 

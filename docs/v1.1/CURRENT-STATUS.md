@@ -2,11 +2,13 @@
 
 更新：2026-10-03。分支：`codex/gongzhu-v1.1-p1`。本轮承接流水优化提交 `4a28d36`，以下状态与本轮代码一起提交。
 
-## 第一批空账本已创建，转向跨设备访问（2026-10-03）
+## HTTPS测试站已部署，第一批等待双人验收（2026-10-03）
 
-用户截图显示成员A已创建空账本（1/2成员、零资产），生成了邀请；当前网页运行于本地0.0.0.0，链接无法跨设备直接使用。用户已选择部署HTTPS隔离测试站，继续使用当前gongzhu-staging。已补本机邀请提示与复制失败时选中链接，准备Vercel候选构建配置；14项页面回归、类型、lint和webpack生产构建通过。
+用户已亲自登录Ariel Vercel账号，检查确认其独立项目原先部署旧main / 8388535且没有环境变量。保留项目 `ariel-b0c2/joint-deposit-record-app`，将Production分支追踪改为 `codex/gongzhu-v1.1-p1`，Node改为22.x，配置两项公开Supabase变量后部署982710d。稳定入口为 https://joint-deposit-record-app-beta.vercel.app/login；Vercel构建Ready且稳定域名指向该开发分支。此处Production是托管环境名称，仍连接隔离测试库，不代表正式发布。
 
-用户补充原项目曾可联网访问，已从原公开仓库API找到Vercel站点 https://joint-deposit-record-app.vercel.app，用户确认平台Vercel，原站点本次访问504 / MIDDLEWARE_INVOCATION_TIMEOUT；等待你或伴侣登录可部署账号；未上线新站，未覆盖旧站或连接旧数据库。Vercel候选账号登录被自动审批阻止（第三方GitHub OAuth具体访问范围未确认）；尚未授权。部署续接见 [STAGING-DEPLOYMENT.md](STAGING-DEPLOYMENT.md)。第一批仍等待第二位成员加入及独立会话验收。
+Supabase Site URL已设为该HTTPS域名，允许其 `/auth/callback**`，保留原有127.0.0.1和localhost回调。线上浏览器与HTTP连接检查通过：Auth/基础表正常、邮箱确认开启；未登录 `/app` 返回307至登录页，`/api/households` 返回JSON401。未代替用户登录共筑、创建账号或写入资金。证据：[HTTPS连接检查](screenshots/batch1-https-connection-ready.png)。
+
+成员A使用已有账号核对原NewNiu空账本，从HTTPS站生成邀请；成员B在自己的设备注册、同浏览器确认邮件并加入同账本。等待同账本2/2、独立会话和退出重登人工结果；第二批尚未开始。详见 [STAGING-DEPLOYMENT.md](STAGING-DEPLOYMENT.md)。
 
 ## 第一批注册登录成功与创建页修复（2026-10-03）
 
@@ -14,7 +16,7 @@
 
 本地开发认证跳转在监听地址为 `0.0.0.0` 时仅接受原始回环Host（127.0.0.1、localhost、::1），保留浏览器来源；生产环境不变。真实HTTP检查登录及确认失败回跳均保留127.0.0.1。用户已有登录的Chrome页面刷新后，创建表单正常显示且时区为America/New_York。没有代替用户创建账本。**211/211测试、类型、lint及webpack生产构建通过**，新增UUID与回跳回归10项。
 
-**第一批仍等待人工创建空账本、第二位成员注册/加入、同账本2/2及独立会话验收；第二批尚未开始。** 推荐以后统一使用 `http://127.0.0.1:3000`，切换来源可能需要重新登录，已有账号不需重新注册。
+**成员A已创建空账本；第一批仍等待HTTPS登录、第二位成员注册/加入、同账本2/2及独立会话验收；第二批尚未开始。** 跨设备验收统一使用HTTPS测试站；127.0.0.1仅保留本地调试。切换来源需要重新登录，已有账号不需重新注册。
 
 ## 第一批注册故障反馈（2026-10-03）（历史）
 
