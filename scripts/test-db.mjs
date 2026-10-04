@@ -8,6 +8,8 @@ import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import {testP6} from './test-p6.mjs';
 import {testP7} from './test-p7.mjs';
+import {testEmptyProject} from './test-empty-project.mjs';
+import {testOnboarding} from './test-onboarding.mjs';
 import {testP8} from './test-p8.mjs';
 import {testTimeZone} from './test-time-zone.mjs';
 import {testLedgerUX} from './test-ledger-ux.mjs';
@@ -18,8 +20,8 @@ const password = randomUUID();
 const database = new EmbeddedPostgres({ databaseDir: join(directory, 'data'), user: 'postgres', password, port,
   persistent: false, initdbFlags: ['--locale=C', '--encoding=UTF8'], postgresFlags: ['-c', 'listen_addresses=127.0.0.1', '-c', 'wal_level=logical'], onLog: () => {}, onError: () => {} });
 const connections = [];
-const connect = async () => {
-  const client = new Client({ host: '127.0.0.1', port, user: 'postgres', password, database: 'postgres' });
+const connect = async (databaseName = 'postgres') => {
+  const client = new Client({ host: '127.0.0.1', port, user: 'postgres', password, database: databaseName });
   await client.connect(); connections.push(client); return client;
 };
 const userA = randomUUID(), userB = randomUUID(), outsider = randomUUID();
@@ -37,6 +39,7 @@ try {
     create publication supabase_realtime;
     alter default privileges in schema public grant select,insert,update,delete on tables to authenticated;
     alter default privileges in schema public grant usage on sequences to authenticated;`);
+  await testEmptyProject({admin,connect,check});
   const migrationDir = new URL('../supabase/migrations/', import.meta.url);
   const migrations = (await readdir(migrationDir)).filter(name => name.endsWith('.sql')).sort();
   const oldMember=randomUUID(),oldPartner=randomUUID(),oldHousehold=randomUUID(),oldSource=randomUUID(),oldPayment=randomUUID();
@@ -299,6 +302,7 @@ try {
   await testP7({a,b,c,admin,userA,userB,check});
   await testLedgerUX({a,b,c,admin,household,category,rpcSubmit,decide,check,userA});
   await testTimeZone({a,b,c,admin,userB,check});
+  await testOnboarding({a,b,c,admin,userA,userB,connect,check});
   await testP8({a,b,c,admin,userA,userB,connect,check});
 } finally {
   for (const connection of connections) await connection.end().catch(() => {});

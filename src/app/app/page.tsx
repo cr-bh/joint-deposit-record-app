@@ -20,7 +20,7 @@ import AppClient, { type InvestmentSnapshot } from "./app-client";
 type Row = Record<string, unknown>;
 const LIST_PAGE_SIZE = 100;
 
-type SearchParams = Promise<{ tab?: string | string[]; entry?: string | string[]; batch?: string | string[]; start?: string | string[]; end?: string | string[]; ledgerPage?: string | string[]; account?: string | string[]; currency?: string | string[]; category?: string | string[]; project?: string | string[]; payment?: string | string[] }>;
+type SearchParams = Promise<{ household?: string | string[]; tab?: string | string[]; entry?: string | string[]; batch?: string | string[]; start?: string | string[]; end?: string | string[]; ledgerPage?: string | string[]; account?: string | string[]; currency?: string | string[]; category?: string | string[]; project?: string | string[]; payment?: string | string[] }>;
 
 export default async function LedgerPage({ searchParams }: { searchParams: SearchParams }) {
   const query = await searchParams;
@@ -28,7 +28,9 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: memberships, error: membershipError } = await supabase.from("household_members").select("household_id, role, households(id,name,reporting_currency)").eq("user_id", user.id).eq("active", true).limit(1);
+  let membershipQuery = supabase.from("household_members").select("household_id, role, households(id,name,reporting_currency)").eq("user_id", user.id).eq("active", true);
+  if (typeof query.household === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(query.household)) membershipQuery = membershipQuery.eq("household_id",query.household);
+  const { data: memberships, error: membershipError } = await membershipQuery.order("joined_at",{ascending:false}).limit(1);
   if (membershipError) throw new Error("账本成员资料读取失败，请重试");
   const membership = memberships?.[0];
   if (!membership) redirect("/onboarding");

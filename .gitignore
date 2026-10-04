@@ -7,3 +7,5 @@ coverage/
 supabase/.temp/
 .vercel
 *.tsbuildinfo
+
+.env.*.local
