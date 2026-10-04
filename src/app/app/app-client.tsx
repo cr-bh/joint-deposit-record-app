@@ -1,7 +1,7 @@
 "use client";
 import { createUUID } from "@/lib/uuid";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { LedgerClockProvider, useLedgerTimeZone } from "./ledger-clock";
 import { ledgerToday, ledgerTimestamp, isLedgerTimeZone } from "@/lib/domain/ledger-time";
 import Link from "next/link";
@@ -377,9 +377,13 @@ export function FxRateModal({ close, household, current, refresh, setMessage, re
   return <Modal close={close} title="提交手动汇率"><form onSubmit={submit} className="space-y-3"><p className="rounded-xl bg-[#f3f5ef] px-3 py-2 text-sm text-[#385248]">每次提交都保存 USD/CNY 与 USD/HKD 的完整快照。未改动的币种请保留当前值；另一位成员批准后才生效。</p><label className="block text-sm"><span className="mb-1 block text-gray-600">1 USD = 多少 CNY</span><input disabled={submitting} required value={usdToCny} onChange={(event) => setUsdToCny(event.target.value)} inputMode="decimal" placeholder="例如 7.2"/></label><label className="block text-sm"><span className="mb-1 block text-gray-600">1 USD = 多少 HKD</span><input disabled={submitting} required value={usdToHkd} onChange={(event) => setUsdToHkd(event.target.value)} inputMode="decimal" placeholder="例如 7.8"/></label><label className="block text-sm"><span className="mb-1 block text-gray-600">生效时间（当前设备本地时间）</span><input disabled={submitting} required type="datetime-local" value={effectiveAt} max={localNow()} onChange={(event) => setEffectiveAt(event.target.value)}/></label><label className="block text-sm"><span className="mb-1 block text-gray-600">人工来源或说明</span><input disabled={submitting} required value={sourceNote} maxLength={240} onChange={(event) => setSourceNote(event.target.value)} placeholder="例如：银行 App 参考价，人工录入"/></label><p className="text-xs text-gray-500">这是人工维护的参考汇率；系统不会获取实时市场行情。历史记录继续引用原批准快照。</p><button disabled={submitting} className="w-full rounded-xl bg-[#1f5243] py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-60">{submitting ? "正在提交…" : "提交给对方审批"}</button></form></Modal>;
 }
 function InvestmentCreate({ close, household, refresh, setMessage }: { close: () => void; household: Props["household"]; refresh: () => void; setMessage: (value: string) => void }) { return <InvestmentMetadataModal householdId={household.id} close={close} refresh={refresh} notify={setMessage}/>; }
+const subscribeToOrigin = () => () => {};
 function InviteModal({ close, householdId, setMessage }: { close: () => void; householdId: string; setMessage: (value: string) => void }) {
   const [email,setEmail]=useState(""),[link,setLink]=useState(""),[busy,setBusy]=useState(false),[error,setError]=useState("");
-  const lock=useRef(false);
+  const lock=useRef(false),linkField=useRef<HTMLTextAreaElement>(null);
+  const [copyNotice,setCopyNotice]=useState("");
+  const origin=useSyncExternalStore(subscribeToOrigin,()=>window.location.origin,()=>"");
+  const localOnly=Boolean(origin && ["0.0.0.0","127.0.0.1","localhost","[::1]"].includes(new URL(origin).hostname));
   async function create(event: React.FormEvent) {
     event.preventDefault();if(lock.current || link)return;lock.current=true;setBusy(true);setError("");
     try {
@@ -391,10 +395,16 @@ function InviteModal({ close, householdId, setMessage }: { close: () => void; ho
     finally {lock.current=false;setBusy(false);}
   }
   async function copy() {
-    try {await navigator.clipboard.writeText(link);setMessage("邀请链接已复制");}
-    catch {setError("无法自动复制，请选中下方链接手动复制。");}
+    setCopyNotice("");
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
+      await navigator.clipboard.writeText(link);setMessage("邀请链接已复制");
+    } catch {
+      linkField.current?.focus();linkField.current?.select();
+      setCopyNotice("链接已选中，请按 ⌘C（Mac）或 Ctrl+C（Windows）复制。");
+    }
   }
-  return <Modal close={close} title="邀请伴侣"><form onSubmit={create} className="space-y-3"><p className="text-sm leading-6 text-gray-500">使用对方注册账号的邮箱。链接仅可被该邮箱账号接受，有效期 7 天；生成后请自行分享给对方。</p><label className="block text-sm">伴侣邮箱<input required type="email" autoComplete="email" disabled={busy || Boolean(link)} value={email} onChange={event=>setEmail(event.target.value)} className="mt-1 w-full rounded-xl border p-3"/></label><button disabled={busy || Boolean(link)} className="w-full rounded-xl bg-[#1f5243] py-3 font-bold text-white disabled:opacity-50">{busy ? "正在生成…" : link ? "邀请已生成" : "生成邀请链接"}</button></form>{error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}{link && <div className="mt-4 rounded-xl bg-[#f3f5ef] p-3"><p className="break-all text-xs">{link}</p><button onClick={copy} className="mt-3 rounded-lg border px-3 py-2 text-sm"><Copy size={15} className="mr-1 inline"/>复制链接</button></div>}</Modal>;
+  return <Modal close={close} title="邀请伴侣">{localOnly && <p role="status" className="mb-4 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-900">当前为本机测试，此链接只能在这台电脑的独立浏览器中使用。跨设备邀请请从 HTTPS 测试站打开账本后生成链接。</p>}<form onSubmit={create} className="space-y-3"><p className="text-sm leading-6 text-gray-500">使用对方注册账号的邮箱。链接仅可被该邮箱账号接受，有效期 7 天；生成后请自行分享给对方。</p><label className="block text-sm">伴侣邮箱<input required type="email" autoComplete="email" disabled={busy || Boolean(link)} value={email} onChange={event=>setEmail(event.target.value)} className="mt-1 w-full rounded-xl border p-3"/></label><button disabled={busy || Boolean(link)} className="w-full rounded-xl bg-[#1f5243] py-3 font-bold text-white disabled:opacity-50">{busy ? "正在生成…" : link ? "邀请已生成" : "生成邀请链接"}</button></form>{error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}{link && <div className="mt-4 rounded-xl bg-[#f3f5ef] p-3"><label className="block text-xs">邀请链接<textarea ref={linkField} readOnly value={link} rows={3} onFocus={event=>event.currentTarget.select()} className="mt-2 w-full resize-none rounded-lg border bg-white p-2 text-xs"/></label>{copyNotice && <p role="status" className="mt-2 text-xs leading-5 text-gray-600">{copyNotice}</p>}<button onClick={copy} className="mt-3 rounded-lg border px-3 py-2 text-sm"><Copy size={15} className="mr-1 inline"/>复制链接</button></div>}</Modal>;
 }
 function Card({ label, value }: { label: string; value: string }) { return <div className="rounded-2xl border bg-white p-4"><p className="text-sm text-gray-500">{label}</p><b className="mt-3 block text-xl">{value}</b></div>; }
 function Empty({ text }: { text: string }) { return <p className="rounded-2xl border bg-white p-8 text-center text-sm text-gray-500">{text}</p>; }
