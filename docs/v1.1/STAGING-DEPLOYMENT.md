@@ -12,6 +12,8 @@
 
 ## 外部账号当前阻塞
 
+用户截图已确认旧项目位于James个人Hobby账号，连接 `JamessssLi/joint-deposit-record-app` 的main / 3890578；不删除旧项目。截图管理页面不在当前可操作的Chrome标签中。最新仓库属于cr-bh；[Vercel个人仓库导入要求仓库Owner](https://vercel.com/docs/git/vercel-for-github#missing-git-repository)，推荐用户自己的Vercel账号连接cr-bh。已询问选择自己账号还是伴侣先同步代码后部署；不擅自改写上游仓库。
+
 已核对原公开仓库homepage为 `https://joint-deposit-record-app.vercel.app`，用户确认托管平台为Vercel；本次浏览器访问返回504 / MIDDLEWARE_INVOCATION_TIMEOUT。未读取原部署日志、修改原站点或确认其数据库，不据此猜测故障来源。等待用户或伴侣在已打开的Vercel页面登录可用账号，然后新增连接当前隔离测试库的测试项目。
 
 Vercel页面未登录；自动审批拒绝点击Continue with GitHub，理由是第三方OAuth可能申请账号/仓库访问且具体范围尚未确认。没有绕过或安装其他连接器。由用户亲自完成Vercel登录；首次使用时由用户确认条款。若安装GitHub应用，仅授权此用户仓库，具体页面权限需人工审阅。
