@@ -52,4 +52,13 @@ describe('Session response and login errors',()=>{
  it('shows actionable errors without echoing server details',()=>{
   expect(authErrorMessage({code:'invalid_credentials'})).toContain('邮箱');expect(authErrorMessage({message:key})).not.toContain(key);
  });
+ it('identifies failed confirmation delivery without exposing provider details',()=>{
+  const result=authErrorMessage({code:'unexpected_failure',status:500,message:`Error sending confirmation email: ${key}`});
+  expect(result).toContain('验证邮件发送失败');expect(result).toContain('邮件服务凭据');expect(result).not.toContain(key);
+ });
+ it('does not blame SMTP for a database or unknown server failure',()=>{
+  for(const error of [{code:'unexpected_failure',message:'Database error saving new user'},{code:'unexpected_failure'},{code:'unexpected_failure',message:123}]){
+   expect(authErrorMessage(error)).toContain('服务日志');expect(authErrorMessage(error)).not.toContain('邮件');
+  }
+ });
 });

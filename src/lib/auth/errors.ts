@@ -6,13 +6,16 @@ const messages: Record<string, string> = {
   over_email_send_rate_limit: "验证邮件发送过于频繁，请稍后重试。",
   over_request_rate_limit: "操作过于频繁，请稍后重试。",
   email_address_not_authorized: "测试环境尚未配置向此邮箱发送确认邮件的服务，请联系账本管理员。",
-  unexpected_failure: "登录或邮件发送服务出现错误，请稍后重试；持续失败时请管理员检查邮件配置。",
+  unexpected_failure: "登录服务处理失败，请联系管理员查看服务日志。",
   signup_disabled: "当前暂未开放注册，请联系账本管理员。",
   otp_expired: "验证链接无效或已过期，请重新发送确认邮件。",
 };
 export function authErrorMessage(error: unknown, fallback = "登录服务暂时不可用，请稍后重试。") {
   if (error && typeof error === "object") {
-    const value = error as { code?: string; status?: number };
+    const value = error as { code?: string; status?: number; message?: string };
+    if (value.code === "unexpected_failure" && typeof value.message === "string" && /error sending (?:confirmation |recovery )?email/i.test(value.message)) {
+      return "验证邮件发送失败，请联系管理员检查发信邮箱及邮件服务凭据，修正后再重试。";
+    }
     if (value.code && messages[value.code]) return messages[value.code];
     if (value.status === 429) return "操作过于频繁，请稍后重试。";
   }
