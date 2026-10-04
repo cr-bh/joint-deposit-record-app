@@ -79,10 +79,11 @@ describe("P7 current assets and recoveries", () => {
     expect(buildOverviewSummary(accountCashBalances([]), [], {}, [], "USD", undefined, 0, 1).netMinor).toBeNull();
     expect(buildOverviewSummary(accountCashBalances([]), [], {}, [], "USD", undefined, 1)).toMatchObject({ payablesMinor: null, netMinor: null });
   });
-  it("renders all current cards, version, estimate date and independent pending count", () => {
+  it("renders current cards and pending count without exposing the internal ledger version", () => {
     const summary = buildOverviewSummary(accountCashBalances([event("expense", 200)]), [], {}, [], "USD");
-    const html = renderToStaticMarkup(createElement(OverviewCards, { summary, currency: "USD", version: 41, pendingCount: 2 }));
-    for (const text of ["共同投资资产", "共同资产总额", "未报销垫款", "成员应返共同款", "扣除往来后的净额", "账本版本 41", "2 笔待审批", "-$2.00"]) expect(html).toContain(text);
+    const html = renderToStaticMarkup(createElement(OverviewCards, { summary, currency: "USD", pendingCount: 2 }));
+    for (const text of ["共同投资资产", "共同资产总额", "未报销垫款", "成员应返共同款", "扣除往来后的净额", "2 笔待审批", "-$2.00"]) expect(html).toContain(text);
     expect(html).not.toContain("PieChart");
+    expect(html).not.toContain("账本版本");
   });
 });
