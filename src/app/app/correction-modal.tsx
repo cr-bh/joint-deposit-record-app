@@ -1,4 +1,5 @@
 "use client";
+import { createUUID } from "@/lib/uuid";
 import { useLedgerTimeZone } from "./ledger-clock";
 import { ledgerToday } from "@/lib/domain/ledger-time";
 import {useEffect,useState} from 'react';
@@ -20,7 +21,7 @@ export function CorrectionDetails({payload:p}:{payload:Row}){
 }
 export default function CorrectionModal({target,householdId,close,refresh,notify,readOnly=false,snapshot}:{target:CorrectionTarget;householdId:string;close:()=>void;refresh:()=>void;notify:(m:string)=>void;readOnly?:boolean;snapshot?:FxRateSnapshot}){
  const timeZone=useLedgerTimeZone();
- const e=target.entry,c=target.claim,[amount,setAmount]=useState(''),[recipient,setRecipient]=useState('common'),[account,setAccount]=useState('bank'),[currency,setCurrency]=useState<Currency>(c?.currency??'USD'),[date,setDate]=useState(() => ledgerToday(timeZone)),[title,setTitle]=useState(target.mode==='refund'?'消费退款':'成员退款返还'),[reason,setReason]=useState(''),[replace,setReplace]=useState(false),[replacementAmount,setReplacementAmount]=useState(String(Number(target.originalPayload?.amountMinor??0)/100)),[replacementTitle,setReplacementTitle]=useState(String(target.originalPayload?.title??'')),[plan,setPlan]=useState<Row|undefined>(target.previewPlan),[loadError,setLoadError]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[key]=useState(()=>crypto.randomUUID());
+ const e=target.entry,c=target.claim,[amount,setAmount]=useState(''),[recipient,setRecipient]=useState('common'),[account,setAccount]=useState('bank'),[currency,setCurrency]=useState<Currency>(c?.currency??'USD'),[date,setDate]=useState(() => ledgerToday(timeZone)),[title,setTitle]=useState(target.mode==='refund'?'消费退款':'成员退款返还'),[reason,setReason]=useState(''),[replace,setReplace]=useState(false),[replacementAmount,setReplacementAmount]=useState(String(Number(target.originalPayload?.amountMinor??0)/100)),[replacementTitle,setReplacementTitle]=useState(String(target.originalPayload?.title??'')),[plan,setPlan]=useState<Row|undefined>(target.previewPlan),[loadError,setLoadError]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[key]=useState(()=>createUUID());
  useEffect(()=>{if(target.mode!=='void'||readOnly)return;const abort=new AbortController();const query=new URLSearchParams({householdId,kind:target.kind??'entry',id:String(e?.id)});fetch(`/api/corrections/void-plan?${query}`,{signal:abort.signal,cache:'no-store'}).then(async r=>{const b=await r.json();if(!r.ok)throw new Error(b.error??'无法读取作废范围');if(!abort.signal.aborted)setPlan(b);}).catch(e=>{if(!abort.signal.aborted)setLoadError(e.message);});return()=>abort.abort();},[target.mode,target.kind,e?.id,householdId,readOnly]);
  let draft:Row|undefined,preview:Row|undefined,issue='';
  try{

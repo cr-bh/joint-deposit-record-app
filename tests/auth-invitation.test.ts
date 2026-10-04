@@ -1,7 +1,24 @@
-import { describe, expect, it } from "vitest";
-import { safeNextPath } from "@/lib/auth/redirect";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { authRedirectOrigin, safeNextPath } from "@/lib/auth/redirect";
 import { householdIdSchema, invitationAcceptSchema, invitationCreateSchema } from "@/lib/validation/invitation";
 import { invitationErrorMessage } from "@/lib/invitations/errors";
+
+afterEach(() => vi.unstubAllEnvs());
+
+describe("本地认证跳转地址", () => {
+  it.each(["127.0.0.1:3000", "localhost:3000", "[::1]:3000"])("保留浏览器原始回环地址 %s", host => {
+    vi.stubEnv("NODE_ENV", "development");
+    expect(authRedirectOrigin({url: "http://0.0.0.0:3000/login", headers: new Headers({host})})).toBe(`http://${host}`);
+  });
+  it.each(["evil.example", "127.0.0.1:3000@evil.example", "localhost.evil.example"])("拒绝非回环Host %s", host => {
+    vi.stubEnv("NODE_ENV", "development");
+    expect(authRedirectOrigin({url: "http://0.0.0.0:3000/login", headers: new Headers({host})})).toBe("http://0.0.0.0:3000");
+  });
+  it("生产环境使用请求原始来源", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    expect(authRedirectOrigin({url: "https://gongzhu.example/login", headers: new Headers({host: "localhost:3000"})})).toBe("https://gongzhu.example");
+  });
+});
 
 describe("认证回跳路径", () => {
   it("保留站内邀请路径和查询参数", () => {

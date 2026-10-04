@@ -1,4 +1,5 @@
 "use client";
+import { createUUID } from "@/lib/uuid";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { LedgerClockProvider, useLedgerTimeZone } from "./ledger-clock";
@@ -205,7 +206,7 @@ function GeneralRecordModal({ close, household, investments, members, userId, sp
   const [quantity, setQuantity] = useState("");
   const [price, setPrice] = useState("");
   const [payerMemberId, setPayerMemberId] = useState(userId);
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => createUUID());
   const [submitting, setSubmitting] = useState(false);
   const selectedInvestment = investments.find((item) => item.id === investmentId);
   const activeCategories = activeSpendingDimensions(localCategories);
@@ -218,7 +219,7 @@ function GeneralRecordModal({ close, household, investments, members, userId, sp
     if (!name || name.length > 30) return setMessage("分类名称需为 1—30 个字符。");
     if (["代付", "报销", "成员代付", "报销付款"].includes(name)) return setMessage("代付和报销是事件类型，不能作为消费分类。");
     if (localCategories.some(item => normalizedDimensionName(item.name) === normalizedDimensionName(name))) return setMessage("分类已存在。");
-    let item = { id: crypto.randomUUID() as string, name, isSystem: false };
+    let item = { id: createUUID() as string, name, isSystem: false };
     if (!readOnly) {
       const response = await fetch("/api/spending-categories", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ householdId: household.id, name }) });
       const body = await response.json().catch(() => ({}));
@@ -306,7 +307,7 @@ export function LedgerSettings({ close, household, categories, projects, refresh
     const existing = (kind === "category" ? localCategories : localProjects).some((item) => normalizedDimensionName(item.name) === normalizedDimensionName(name));
     if (existing) return setMessage(`${kind === "category" ? "分类" : "事项"}已存在。`);
     let item: SpendingDimension;
-    if (readOnly) item = { id: crypto.randomUUID(), name, isSystem: false };
+    if (readOnly) item = { id: createUUID(), name, isSystem: false };
     else {
       const response = await fetch(kind === "category" ? "/api/spending-categories" : "/api/spending-projects", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ householdId: household.id, name }) });
       const body = await response.json().catch(() => ({}));
@@ -346,7 +347,7 @@ export function FxRateModal({ close, household, current, refresh, setMessage, re
   const [usdToHkd, setUsdToHkd] = useState(current ? String(current.usdToHkd) : "");
   const [sourceNote, setSourceNote] = useState(current?.sourceNote ?? "");
   const [effectiveAt, setEffectiveAt] = useState(localNow);
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => createUUID());
   const [submitting, setSubmitting] = useState(false);
 
   async function submit(event: React.FormEvent) {

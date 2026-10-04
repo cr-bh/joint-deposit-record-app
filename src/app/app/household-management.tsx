@@ -1,4 +1,5 @@
 "use client";
+import { createUUID } from "@/lib/uuid";
 import { useEffect, useState } from "react";
 import { managementOverview, managementPlanSchema, type ManagementPlan } from "@/lib/domain/household-management";
 
@@ -16,7 +17,7 @@ export function HouseholdManagementDetails({ snapshot, reason }: { snapshot: unk
 
 export default function HouseholdManagement({ householdId, close, refresh, notify, previewPlan }: { householdId: string; close: () => void; refresh: () => void; notify: (message: string) => void; previewPlan?: ManagementPlan }) {
   const [plan,setPlan] = useState(previewPlan), [error,setError] = useState(""), [reason,setReason] = useState(""), [busy,setBusy] = useState(false);
-  const [key] = useState(() => crypto.randomUUID());
+  const [key] = useState(() => createUUID());
   useEffect(() => {
     if (previewPlan) return;
     const abort = new AbortController();

@@ -1,4 +1,5 @@
 "use client";
+import { createUUID } from "@/lib/uuid";
 import { useLedgerTimeZone } from "./ledger-clock";
 import { ledgerToday, ledgerTimestamp } from "@/lib/domain/ledger-time";
 
@@ -120,7 +121,7 @@ export function SettlementModal({ householdId, members, claims, initialPayee, in
   const [amounts, setAmounts] = useState<Record<string, string>>(initialClaim ? { [initialClaim.id]: ((initialClaim.availableMinor ?? initialClaim.remainingMinor) / 100).toFixed(2) } : {});
   const timeZone = useLedgerTimeZone();
   const [date, setDate] = useState(() => ledgerToday(timeZone)), [title, setTitle] = useState("成员报销打款");
-  const [key] = useState(() => globalThis.crypto.randomUUID()), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [key] = useState(() => createUUID()), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const available = claims.filter(claim => claim.claimantId === payee && claim.state !== "voided" && (claim.availableMinor ?? claim.remainingMinor) > 0);
   let calculation: ReturnType<typeof calculateSettlement> | undefined, issue = "";
   try {

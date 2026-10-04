@@ -1,4 +1,5 @@
 "use client";
+import { createUUID } from "@/lib/uuid";
 import { useRouter } from "next/navigation";
 import { useRef, useSyncExternalStore, useState } from "react";
 import Link from "next/link";
@@ -7,7 +8,7 @@ export default function OnboardingPage() {
   const router=useRouter(), browserZone=useSyncExternalStore(subscribe,()=>Intl.DateTimeFormat().resolvedOptions().timeZone,()=>"UTC");
   const [zoneOverride,setTimeZone]=useState(""),[name,setName]=useState(""),[currency,setCurrency]=useState("USD");
   const [message,setMessage]=useState(""),[busy,setBusy]=useState(false),lock=useRef(false);
-  const [key]=useState(()=>crypto.randomUUID()),timeZone=zoneOverride||browserZone;
+  const [key]=useState(()=>createUUID()),timeZone=zoneOverride||browserZone;
   async function create(event:React.FormEvent) {
     event.preventDefault();if(lock.current)return;lock.current=true;setBusy(true);setMessage("");
     try {

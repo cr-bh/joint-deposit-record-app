@@ -1,12 +1,20 @@
-import {beforeEach,describe,expect,it,vi} from 'vitest';
+import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {NextRequest,NextResponse} from 'next/server';
 const mocks=vi.hoisted(()=>({config:vi.fn(),session:vi.fn()}));
 vi.mock('@/lib/supabase/config',()=>({getPublicSupabaseConfig:mocks.config}));
 vi.mock('@/lib/supabase/middleware',()=>({updateSession:mocks.session}));
 import {proxy} from '@/proxy';
+afterEach(()=>vi.unstubAllEnvs());
 beforeEach(()=>{mocks.config.mockReset().mockReturnValue({ready:true,url:'https://example.supabase.co',key:'public'});mocks.session.mockReset().mockResolvedValue({response:NextResponse.next(),user:null,unavailable:false});});
 const request=(path:string)=>new NextRequest(`http://127.0.0.1:3000${path}`);
 describe('Auth response routing',()=>{
+ it('keeps local login and authenticated redirects on the browser host',async()=>{
+  vi.stubEnv('NODE_ENV','development');
+  const req=(path:string)=>new NextRequest(`http://0.0.0.0:3000${path}`,{headers:{host:'127.0.0.1:3000'}});
+  expect(new URL((await proxy(req('/onboarding'))).headers.get('location')!).origin).toBe('http://127.0.0.1:3000');
+  mocks.session.mockResolvedValue({response:NextResponse.next(),user:{id:'member'},unavailable:false});
+  expect((await proxy(req('/login?next=%2Fonboarding'))).headers.get('location')).toBe('http://127.0.0.1:3000/onboarding');
+ });
  it('allows static resources before checking configuration or session',async()=>{
   mocks.config.mockReturnValue({ready:false,reason:'missing'});
   expect((await proxy(request('/_next/static/chunks/page.js'))).headers.get('location')).toBeNull();expect(mocks.session).not.toHaveBeenCalled();
