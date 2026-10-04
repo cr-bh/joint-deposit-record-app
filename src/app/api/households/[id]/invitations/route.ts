@@ -11,7 +11,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
-  const { data, error } = await supabase.rpc("create_invitation", { target_household: parsedId.data, invited_email_input: parsedBody.data.email });
-  if (error) return NextResponse.json({ error: invitationErrorMessage(error.message) }, { status: 400 });
-  return NextResponse.json({ token: data });
+  const { data, error } = await supabase.rpc(parsedBody.data.replaceExisting ? "replace_invitation" : "create_invitation", { target_household: parsedId.data, invited_email_input: parsedBody.data.email });
+  const headers = { "Cache-Control": "private, no-store" };
+  if (error) {
+    const existing = error.message === "an active invitation already exists for this email";
+    return NextResponse.json({ error: invitationErrorMessage(error.message), ...(existing ? { code: "active_invitation_exists" } : {}) }, { status: existing ? 409 : 400, headers });
+  }
+  return NextResponse.json({ token: data }, { headers });
 }

@@ -381,15 +381,19 @@ const subscribeToOrigin = () => () => {};
 function InviteModal({ close, householdId, setMessage }: { close: () => void; householdId: string; setMessage: (value: string) => void }) {
   const [email,setEmail]=useState(""),[link,setLink]=useState(""),[busy,setBusy]=useState(false),[error,setError]=useState("");
   const lock=useRef(false),linkField=useRef<HTMLTextAreaElement>(null);
-  const [copyNotice,setCopyNotice]=useState("");
+  const [copyNotice,setCopyNotice]=useState(""),[existingInvitation,setExistingInvitation]=useState(false),[replaced,setReplaced]=useState(false);
   const origin=useSyncExternalStore(subscribeToOrigin,()=>window.location.origin,()=>"");
   const localOnly=Boolean(origin && ["0.0.0.0","127.0.0.1","localhost","[::1]"].includes(new URL(origin).hostname));
-  async function create(event: React.FormEvent) {
-    event.preventDefault();if(lock.current || link)return;lock.current=true;setBusy(true);setError("");
+  async function create(replaceExisting = false) {
+    if(lock.current || link)return;lock.current=true;setBusy(true);setError("");
     try {
-      const response=await fetch(`/api/households/${householdId}/invitations`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email})});
+      const response=await fetch(`/api/households/${householdId}/invitations`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email,replaceExisting})});
       const body=await response.json().catch(()=>({}));
-      if(!response.ok)throw new Error(body.error||"创建邀请失败，请重试");
+      if(!response.ok) {
+        if(body.code === "active_invitation_exists") {setExistingInvitation(true);return;}
+        throw new Error(body.error||"创建邀请失败，请重试");
+      }
+      setExistingInvitation(false);setReplaced(replaceExisting);
       setLink(`${window.location.origin}/invite/${body.token}`);
     } catch(error) {setError(error instanceof Error ? error.message : "网络连接失败，请重试");}
     finally {lock.current=false;setBusy(false);}
@@ -404,7 +408,7 @@ function InviteModal({ close, householdId, setMessage }: { close: () => void; ho
       setCopyNotice("链接已选中，请按 ⌘C（Mac）或 Ctrl+C（Windows）复制。");
     }
   }
-  return <Modal close={close} title="邀请伴侣">{localOnly && <p role="status" className="mb-4 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-900">当前为本机测试，此链接只能在这台电脑的独立浏览器中使用。跨设备邀请请从 HTTPS 测试站打开账本后生成链接。</p>}<form onSubmit={create} className="space-y-3"><p className="text-sm leading-6 text-gray-500">使用对方注册账号的邮箱。链接仅可被该邮箱账号接受，有效期 7 天；生成后请自行分享给对方。</p><label className="block text-sm">伴侣邮箱<input required type="email" autoComplete="email" disabled={busy || Boolean(link)} value={email} onChange={event=>setEmail(event.target.value)} className="mt-1 w-full rounded-xl border p-3"/></label><button disabled={busy || Boolean(link)} className="w-full rounded-xl bg-[#1f5243] py-3 font-bold text-white disabled:opacity-50">{busy ? "正在生成…" : link ? "邀请已生成" : "生成邀请链接"}</button></form>{error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}{link && <div className="mt-4 rounded-xl bg-[#f3f5ef] p-3"><label className="block text-xs">邀请链接<textarea ref={linkField} readOnly value={link} rows={3} onFocus={event=>event.currentTarget.select()} className="mt-2 w-full resize-none rounded-lg border bg-white p-2 text-xs"/></label>{copyNotice && <p role="status" className="mt-2 text-xs leading-5 text-gray-600">{copyNotice}</p>}<button onClick={copy} className="mt-3 rounded-lg border px-3 py-2 text-sm"><Copy size={15} className="mr-1 inline"/>复制链接</button></div>}</Modal>;
+  return <Modal close={close} title="邀请伴侣">{localOnly && <p role="status" className="mb-4 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-900">当前为本机测试，此链接只能在这台电脑的独立浏览器中使用。跨设备邀请请从 HTTPS 测试站打开账本后生成链接。</p>}<form onSubmit={event=>{event.preventDefault();void create();}} className="space-y-3"><p className="text-sm leading-6 text-gray-500">使用对方注册账号的邮箱。链接仅可被该邮箱账号接受，有效期 7 天；生成后请自行分享给对方。</p><label className="block text-sm">伴侣邮箱<input required type="email" autoComplete="email" disabled={busy || Boolean(link)} value={email} onChange={event=>{setEmail(event.target.value);setExistingInvitation(false);setError("");}} className="mt-1 w-full rounded-xl border p-3"/></label><button disabled={busy || Boolean(link) || existingInvitation} className="w-full rounded-xl bg-[#1f5243] py-3 font-bold text-white disabled:opacity-50">{busy ? "正在生成…" : link ? "邀请已生成" : existingInvitation ? "已有有效邀请" : "生成邀请链接"}</button></form>{existingInvitation ? <div className="mt-4 rounded-xl bg-amber-50 p-3"><p role="status" className="text-sm leading-6 text-amber-900">该邮箱已有有效邀请。若原链接丢失或是本地地址，可换发当前站点的新链接；旧链接将立即失效，对方需要使用新链接。</p><button type="button" disabled={busy} onClick={()=>void create(true)} className="mt-3 w-full rounded-xl border border-[#1f5243] bg-white py-3 font-bold text-[#1f5243] disabled:opacity-50">换发邀请链接（旧链接失效）</button></div> : null}{error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}{link && <div className="mt-4 rounded-xl bg-[#f3f5ef] p-3">{replaced && <p role="status" className="mb-3 text-sm text-[#1f5243]">新邀请已生成，旧链接已失效。请分享下方新链接。</p>}<label className="block text-xs">邀请链接<textarea ref={linkField} readOnly value={link} rows={3} onFocus={event=>event.currentTarget.select()} className="mt-2 w-full resize-none rounded-lg border bg-white p-2 text-xs"/></label>{copyNotice && <p role="status" className="mt-2 text-xs leading-5 text-gray-600">{copyNotice}</p>}<button onClick={copy} className="mt-3 rounded-lg border px-3 py-2 text-sm"><Copy size={15} className="mr-1 inline"/>复制链接</button></div>}</Modal>;
 }
 function Card({ label, value }: { label: string; value: string }) { return <div className="rounded-2xl border bg-white p-4"><p className="text-sm text-gray-500">{label}</p><b className="mt-3 block text-xl">{value}</b></div>; }
 function Empty({ text }: { text: string }) { return <p className="rounded-2xl border bg-white p-8 text-center text-sm text-gray-500">{text}</p>; }
