@@ -31,11 +31,15 @@ describe('Connection check',()=>{
   const fetcher=vi.fn(async(input:RequestInfo | URL)=>{requests.push(String(input));return Response.json(requests.length===1 ? {mailer_autoconfirm:false} : []);});
   const result=await checkSupabaseConnection(config,fetcher);
   expect(result).toMatchObject({auth:'ok',database:'ok',emailConfirmation:true});expect(result.message).toContain('仍需');
-  expect(requests.slice(1)).toHaveLength(5);expect(requests.slice(1).every(url=>url.endsWith('limit=0'))).toBe(true);expect(JSON.stringify(result)).not.toContain(key);
+  expect(requests.slice(1)).toHaveLength(18);expect(requests.slice(1).every(url=>url.endsWith('limit=0'))).toBe(true);expect(JSON.stringify(result)).not.toContain(key);
  });
  it('separates a working Auth service from missing migrations',async()=>{
   let count=0;const fetcher=vi.fn(async()=>++count===1 ? Response.json({mailer_autoconfirm:true}) : new Response('{}',{status:404}));
   expect(await checkSupabaseConnection(config,fetcher)).toMatchObject({auth:'ok',database:'error',emailConfirmation:false});
+ });
+ it('does not declare the database ready when onboarding works but a financial migration is missing',async()=>{
+  const fetcher=vi.fn(async(input:RequestInfo | URL)=>String(input).includes('/auth/v1/settings') ? Response.json({mailer_autoconfirm:false}) : String(input).includes('/ledger_entries?') ? new Response('{}',{status:400}) : Response.json([]));
+  expect(await checkSupabaseConnection(config,fetcher)).toMatchObject({auth:'ok',database:'error'});
  });
  it('fails safely for Auth errors and network failures',async()=>{
   expect(await checkSupabaseConnection(config,vi.fn(async()=>new Response('{}',{status:401})))).toMatchObject({auth:'error',database:'unchecked'});

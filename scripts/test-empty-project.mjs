@@ -13,7 +13,7 @@ export async function testEmptyProject({admin,connect,check}) {
     alter default privileges in schema public grant select,insert,update,delete on tables to authenticated,anon;
     alter default privileges in schema public grant usage on sequences to authenticated,anon;`);
   const sql=await emptyProjectSql();await fresh.query(sql);
-  const count=(await fresh.query('select count(*) from supabase_migrations.schema_migrations')).rows[0].count;assert.equal(count,'18');
+  const count=(await fresh.query('select count(*) from supabase_migrations.schema_migrations')).rows[0].count;assert.equal(count,'19');
   for(const table of ['auth.users','public.households','public.ledger_entries'])assert.equal((await fresh.query(`select count(*) from ${table}`)).rows[0].count,'0');
   assert.equal((await fresh.query("select count(*) from pg_tables where schemaname='public' and not rowsecurity")).rows[0].count,'0');
   await assert.rejects(fresh.query(sql),/database is not empty/);await fresh.query('rollback');

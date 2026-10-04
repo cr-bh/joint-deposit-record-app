@@ -20,7 +20,7 @@ export async function loadDomain() {
     return { directory, ...Object.assign({}, ...modules) };
   } catch (error) { await rm(directory, { recursive: true, force: true }); throw error; }
 }
-const normalize = row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value instanceof Date ? (["occurred_at", "value_date"].includes(key) ? value.toISOString().slice(0,10) : value.toISOString()) : typeof value === 'string' && /^(version|amount_minor|quantity_milli|quantity_micro|unit_price_minor|unit_price_1e4|unit_price_1e8|unit_value_minor|unit_value_1e4|unit_value_1e8|claimed_minor|payment_minor|claim_version|opening_quantity_milli|opening_cost_minor|total_value_minor|recovery_original_minor)$/.test(key) ? Number(value) : value]));
+export const normalize = row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value instanceof Date ? (["occurred_at", "value_date"].includes(key) ? value.toISOString().slice(0,10) : value.toISOString()) : typeof value === 'string' && /^(version|amount_minor|quantity_milli|quantity_micro|unit_price_minor|unit_price_1e4|unit_price_1e8|unit_value_minor|unit_value_1e4|unit_value_1e8|claimed_minor|payment_minor|claim_version|opening_quantity_milli|opening_cost_minor|total_value_minor|recovery_original_minor)$/.test(key) ? Number(value) : value]));
 
 export async function testP7({ a, b, c, admin, userA, userB, check }) {
   const domain = await loadDomain();

@@ -13,12 +13,14 @@ import {testOnboarding} from './test-onboarding.mjs';
 import {testP8} from './test-p8.mjs';
 import {testTimeZone} from './test-time-zone.mjs';
 import {testLedgerUX} from './test-ledger-ux.mjs';
+import {testRecovery} from './test-recovery.mjs';
+import {testScale} from './test-scale.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'gongzhu-p4-db-'));
 const port = Number(process.env.GONGZHU_TEST_PG_PORT ?? 55439);
 const password = randomUUID();
 const database = new EmbeddedPostgres({ databaseDir: join(directory, 'data'), user: 'postgres', password, port,
-  persistent: false, initdbFlags: ['--locale=C', '--encoding=UTF8'], postgresFlags: ['-c', 'listen_addresses=127.0.0.1', '-c', 'wal_level=logical'], onLog: () => {}, onError: () => {} });
+  persistent: true, initdbFlags: ['--locale=C', '--encoding=UTF8'], postgresFlags: ['-c', 'listen_addresses=127.0.0.1', '-c', 'wal_level=logical'], onLog: () => {}, onError: () => {} });
 const connections = [];
 const connect = async (databaseName = 'postgres') => {
   const client = new Client({ host: '127.0.0.1', port, user: 'postgres', password, database: databaseName });
@@ -42,6 +44,7 @@ try {
   await testEmptyProject({admin,connect,check});
   const migrationDir = new URL('../supabase/migrations/', import.meta.url);
   const migrations = (await readdir(migrationDir)).filter(name => name.endsWith('.sql')).sort();
+  await admin.query('create schema supabase_migrations; create table supabase_migrations.schema_migrations(version text primary key,name text not null)');
   const oldMember=randomUUID(),oldPartner=randomUUID(),oldHousehold=randomUUID(),oldSource=randomUUID(),oldPayment=randomUUID();
   let oldClaim;
   const oldInvestment=randomUUID(),oldBuy=randomUUID(),oldValuation=randomUUID();
@@ -64,7 +67,7 @@ try {
       await admin.query("insert into public.investments(id,household_id,name,currency,created_by) values($1,$2,'P4 legacy investment','USD',$3)",[oldInvestment,oldHousehold,oldMember]);
       await admin.query("insert into public.proposals(id,household_id,submitter_id,idempotency_key,payload) values($1,$2,$3,$4,$5::jsonb),($6,$2,$3,$7,$8::jsonb)",[oldBuy,oldHousehold,oldMember,randomUUID(),JSON.stringify({type:'investment_buy',investmentId:oldInvestment,quantityMilli:1000,amountMinor:100,currency:'USD',occurredAt:'2026-09-04',title:'pending P4 buy'}),oldValuation,randomUUID(),JSON.stringify({type:'investment_valuation',investmentId:oldInvestment,unitValueTenThousandths:12000,amountMinor:0,currency:'USD',occurredAt:'2026-09-04',title:'pending P4 unit valuation'})]);
     }
-    try { await admin.query(await readFile(new URL(name, migrationDir), 'utf8')); }
+    try { await admin.query(await readFile(new URL(name, migrationDir), 'utf8')); await admin.query('insert into supabase_migrations.schema_migrations(version,name) values($1,$2)',[name.split('_')[0],name]); }
     catch (error) { console.error(`Migration failed: ${name}`); throw error; }
   }
   console.log(`PASS clean install: ${migrations.length} migrations (PostgreSQL ${(await admin.query('show server_version')).rows[0].server_version})`);
@@ -304,6 +307,22 @@ try {
   await testTimeZone({a,b,c,admin,userB,check});
   await testOnboarding({a,b,c,admin,userA,userB,connect,check});
   await testP8({a,b,c,admin,userA,userB,connect,check});
+  await testScale({a,b,admin,userA,userB,check});
+  await check('Rollback-only hosted-compatible business probe reconciles PRD435 and preserves reference ledger',async()=>{
+    const reference=(await a.query("select public.create_household('NewNiu','USD','America/New_York') id")).rows[0].id;
+    await admin.query("insert into public.household_members(household_id,user_id,role) values($1,$2,'member')",[reference,userB]);
+    const before=(await admin.query('select ledger_version from public.households where id=$1',[reference])).rows[0].ledger_version;
+    try {
+      const results=await admin.query(await readFile(new URL('./staging-business-probe.sql',import.meta.url),'utf8'));
+      assert.equal(results.at(-1).rows[0].probe_records_rolled_back,true);
+      assert.equal((await admin.query('select ledger_version from public.households where id=$1',[reference])).rows[0].ledger_version,before);
+    } catch(error) {await admin.query('rollback');throw error;}
+  });
+  await check('Realtime publication includes every subscribed household table',async()=>{
+    const published=new Set((await admin.query("select tablename from pg_publication_tables where pubname='supabase_realtime' and schemaname='public'")).rows.map(r=>r.tablename));
+    for(const table of ['households','household_members','proposals','ledger_entries','cash_accounts','cash_transfers','investments','investment_valuations','fx_rate_snapshots','spending_categories','spending_projects','reimbursement_claims','settlement_batches','settlement_allocations','household_archives','void_requests']) assert(published.has(table),`missing publication: ${table}`);
+  });
+  await testRecovery({admin,connections,database,directory,port,password,check,userA,userB});
 } finally {
   for (const connection of connections) await connection.end().catch(() => {});
   await database.stop().catch(() => {}); await rm(directory,{recursive:true,force:true});
