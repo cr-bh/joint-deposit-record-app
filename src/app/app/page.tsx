@@ -1,3 +1,4 @@
+import { selectHouseholdId } from "@/lib/domain/household-navigation";
 import { frozenLedgerSchema } from "@/lib/domain/household-management";
 import { buildLedgerRecordStates } from "@/lib/domain/ledger-record-states";
 import { redirect } from "next/navigation";
@@ -28,11 +29,16 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  let membershipQuery = supabase.from("household_members").select("household_id, role, households(id,name,reporting_currency)").eq("user_id", user.id).eq("active", true);
-  if (typeof query.household === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(query.household)) membershipQuery = membershipQuery.eq("household_id",query.household);
-  const { data: memberships, error: membershipError } = await membershipQuery.order("joined_at",{ascending:false}).limit(1);
+  const { data: memberships, error: membershipError } = await supabase.from("household_members").select("household_id, role, households(id,name,reporting_currency,status)").eq("user_id", user.id).eq("active", true).order("joined_at",{ascending:false});
   if (membershipError) throw new Error("账本成员资料读取失败，请重试");
-  const membership = memberships?.[0];
+  const householdOptions = (memberships ?? []).flatMap(member => {
+    const item = Array.isArray(member.households) ? member.households[0] : member.households;
+    return item ? [{ id: String(item.id), name: String(item.name), status: String(item.status) }] : [];
+  });
+  const requested = typeof query.household === "string" ? query.household : undefined;
+  const selectedId = selectHouseholdId(householdOptions, requested);
+  const membership = memberships?.find(member => member.household_id === selectedId);
+  if (requested && !membership) redirect("/app");
   if (!membership) redirect("/onboarding");
   const household = Array.isArray(membership.households) ? membership.households[0] : membership.households;
   if (!household) redirect("/onboarding");
@@ -170,7 +176,8 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
 
   return <AppClient
     ledgerRecordStates={buildLedgerRecordStates(events, snapshot.proposals, reimbursementClaims, activity.map(row => ({ id: String(row.id), status: String(row.status), proposalId: typeof row.proposal_id === "string" ? row.proposal_id : undefined })))}
-    key={`${query.tab ?? "overview"}:${query.entry ?? ""}:${query.batch ?? ""}`}
+    key={`${householdId}:${snapshot.configuration.status}:${query.tab ?? "overview"}:${query.entry ?? ""}:${query.batch ?? ""}`}
+    householdOptions={householdOptions}
     household={{ id: householdId, name: snapshot.configuration.name, reportingCurrency, ledgerVersion: version, timeZone: snapshot.configuration.time_zone, timeZoneConfirmed: snapshot.configuration.time_zone_confirmed, status: snapshot.configuration.status, archivedAt: snapshot.configuration.archived_at ?? undefined, hasArchiveSnapshot: Boolean(snapshot.configuration.archive_snapshot_id) }}
     userId={user.id}
     role={membership.role}

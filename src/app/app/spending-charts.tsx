@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { LedgerLink as Link, LedgerHouseholdField } from "./ledger-navigation";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend, ReferenceLine } from "recharts";
 import type { FlowEdge, SpendingReport } from "@/lib/domain/spending-report";
 import type { LedgerFilters } from "@/lib/domain/ledger-filters";
@@ -20,7 +20,7 @@ export default function SpendingCharts({ report, currency, filters, categories, 
   return <div className="space-y-5">
     <section className="rounded-2xl border bg-white p-5">
       <h2 className="font-bold">消费分析</h2><p className="mt-1 text-xs leading-5 text-gray-500">筛选仅影响消费图表；上方资产始终为当前全部账本。按记录发生日和锁定汇率统计，报销打款、成员返还与投资交易不重复计入消费。</p>
-      <form action={action} className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><input type="hidden" name="tab" value="overview"/>
+      <form action={action} className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><input type="hidden" name="tab" value="overview"/><LedgerHouseholdField/>
         <label className="text-sm">开始日期<input className={input} type="date" name="start" defaultValue={filters.start || report.start}/></label>
         <label className="text-sm">结束日期<input className={input} type="date" name="end" defaultValue={filters.end || report.end}/></label>
         {[["account", "支付账户", [["bank", "共同银行"], ["brokerage", "共同券商"]]], ["currency", "原币币种", ["USD", "CNY", "HKD"].map(c => [c, c])], ["category", "用途分类", categories.map(c => [c.name, c.name])], ["project", "具体事项", projects.map(p => [p.name, p.name])], ["payment", "支付方式", [["joint", "共同账户支付"], ["member", "成员代付"]]]].map(([name, label, options]) => <label key={String(name)} className="text-sm">{String(label)}<select className={input} name={String(name)} defaultValue={String(filters[name as keyof LedgerFilters] ?? "")}><option value="">全部</option>{(options as string[][]).map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>)}

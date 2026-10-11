@@ -5,7 +5,7 @@ import { ledgerToday, ledgerTimestamp } from "@/lib/domain/ledger-time";
 
 import CorrectionModal, {type CorrectionTarget} from "./correction-modal";
 import { useState } from "react";
-import Link from "next/link";
+import { LedgerLink as Link } from "./ledger-navigation";
 import type { Currency } from "@/lib/domain/balance-calculations";
 import { claimStateLabel, type ReimbursementClaimView } from "@/lib/domain/reimbursement-claims";
 import { paymentStatusLabel, type SettlementBatchView } from "@/lib/domain/settlement-batches";
