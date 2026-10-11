@@ -28,7 +28,7 @@ export function buildSpendingReport(events: LedgerEvent[], reporting: Currency, 
   const candidates = events.filter(e => e.status === "posted" && ["expense", "reimbursement", "expense_refund"].includes(e.type)).map(event => {
     const original = event.type === "expense_refund" ? sources.get(event.refundSourceEntryId ?? "") : event;
     // Source facts govern category/payment filters; refund dates and currencies remain their own facts.
-    return { event, original, occurred_at: event.occurredAt, entry_type: event.type, account_kind: event.accountKind, currency: event.currency, category: original?.category ?? event.category, project_name: original?.project ?? event.project, payer_member_id: original?.payerMemberId };
+    return { event, original, occurred_at: event.occurredAt, entry_type: event.type, account_kind: event.accountKind, currency: event.currency, category: original?.category ?? event.category, project_name: original?.project ?? event.project, payer_member_id: original?.payerMemberId, consumer_scope: original?.consumerScope, consumer_member_id: original?.consumerMemberId };
   });
   const selected = filterLedgerActivity(candidates, filters);
   const records: SpendingRecord[] = selected.map(({ event, original, category, project_name }) => {

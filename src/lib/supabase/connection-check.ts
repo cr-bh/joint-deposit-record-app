@@ -15,7 +15,7 @@ export async function checkSupabaseConnection(config: PublicSupabaseConfig, requ
       "profiles?select=id,display_name&limit=0", "household_members?select=household_id,user_id,role,active&limit=0",
       "invitations?select=id,revoked_at&limit=0", "household_archives?select=id,proposal_id&limit=0",
       "proposals?select=id,payload,idempotency_key,fx_snapshot_id&limit=0",
-      "ledger_entries?select=id,account_kind,quantity_micro,effective_sequence,refund_source_entry_id,recovery_original_minor,void_proposal_id&limit=0",
+      "ledger_entries?select=id,account_kind,quantity_micro,effective_sequence,consumer_scope,consumer_member_id,refund_source_entry_id,recovery_original_minor,void_proposal_id&limit=0",
       "cash_accounts?select=household_id,kind&limit=0", "cash_transfers?select=id,movement_type,destination_amount_minor,destination_currency&limit=0",
       "investments?select=id,opening_quantity_milli,opening_cost_minor,position_version&limit=0",
       "investment_valuations?select=id,input_mode,quantity_micro,total_value_minor,basis_signature&limit=0",

@@ -12,6 +12,7 @@ import {testEmptyProject} from './test-empty-project.mjs';
 import {testOnboarding} from './test-onboarding.mjs';
 import {testP8} from './test-p8.mjs';
 import {testTimeZone} from './test-time-zone.mjs';
+import {testConsumptionMembers} from './test-consumption-members.mjs';
 import {testLedgerUX} from './test-ledger-ux.mjs';
 import {testRecovery} from './test-recovery.mjs';
 import {testScale} from './test-scale.mjs';
@@ -304,6 +305,7 @@ try {
   await testP6({a,b,c,admin,household,userA,claim,request,submit,proposal,rpcSubmit,decide,createInvestment,buyPayload,basisFor,check});
   await testP7({a,b,c,admin,userA,userB,check});
   await testLedgerUX({a,b,c,admin,household,category,rpcSubmit,decide,check,userA});
+  await testConsumptionMembers({a,b,c,admin,household,category,rpcSubmit,decide,check,userA,userB,outsider,connect});
   await testTimeZone({a,b,c,admin,userB,check});
   await testOnboarding({a,b,c,admin,userA,userB,connect,check});
   await testP8({a,b,c,admin,userA,userB,connect,check});

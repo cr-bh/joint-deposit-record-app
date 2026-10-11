@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {readdir} from 'node:fs/promises';
 import {emptyProjectSql} from './prepare-empty-project.mjs';
 export async function testEmptyProject({admin,connect,check}) {
  await check('P8 empty-project bootstrap is atomic, records migration versions, seeds no users/data and refuses reapplication',async()=>{
@@ -13,7 +14,7 @@ export async function testEmptyProject({admin,connect,check}) {
     alter default privileges in schema public grant select,insert,update,delete on tables to authenticated,anon;
     alter default privileges in schema public grant usage on sequences to authenticated,anon;`);
   const sql=await emptyProjectSql();await fresh.query(sql);
-  const count=(await fresh.query('select count(*) from supabase_migrations.schema_migrations')).rows[0].count;assert.equal(count,'19');
+  const count=(await fresh.query('select count(*) from supabase_migrations.schema_migrations')).rows[0].count;assert.equal(Number(count),(await readdir(new URL('../supabase/migrations/',import.meta.url))).filter(name=>name.endsWith('.sql')).length);
   for(const table of ['auth.users','public.households','public.ledger_entries'])assert.equal((await fresh.query(`select count(*) from ${table}`)).rows[0].count,'0');
   assert.equal((await fresh.query("select count(*) from pg_tables where schemaname='public' and not rowsecurity")).rows[0].count,'0');
   await assert.rejects(fresh.query(sql),/database is not empty/);await fresh.query('rollback');

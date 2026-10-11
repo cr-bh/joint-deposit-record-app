@@ -21,7 +21,7 @@ import AppClient, { type InvestmentSnapshot } from "./app-client";
 type Row = Record<string, unknown>;
 const LIST_PAGE_SIZE = 100;
 
-type SearchParams = Promise<{ household?: string | string[]; tab?: string | string[]; entry?: string | string[]; batch?: string | string[]; start?: string | string[]; end?: string | string[]; ledgerPage?: string | string[]; account?: string | string[]; currency?: string | string[]; category?: string | string[]; project?: string | string[]; payment?: string | string[] }>;
+type SearchParams = Promise<{ household?: string | string[]; tab?: string | string[]; entry?: string | string[]; batch?: string | string[]; start?: string | string[]; end?: string | string[]; ledgerPage?: string | string[]; account?: string | string[]; currency?: string | string[]; category?: string | string[]; project?: string | string[]; payment?: string | string[]; payer?: string | string[]; consumer?: string | string[] }>;
 
 export default async function LedgerPage({ searchParams }: { searchParams: SearchParams }) {
   const query = await searchParams;
@@ -172,7 +172,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
     const profile = Array.isArray(member.profiles) ? member.profiles[0] : member.profiles;
     return [String(member.user_id), String((profile as Row | null)?.display_name ?? `成员 ${String(member.user_id).slice(0,8)}`)];
   }));
-  const spendingReport = buildSpendingReport(events, reportingCurrency, historicalRates, ledgerFilters, memberNames);
+  const spendingReport = buildSpendingReport(events, reportingCurrency, historicalRates, { ...ledgerFilters, payer: "", consumer: "" }, memberNames);
 
   return <AppClient
     ledgerRecordStates={buildLedgerRecordStates(events, snapshot.proposals, reimbursementClaims, activity.map(row => ({ id: String(row.id), status: String(row.status), proposalId: typeof row.proposal_id === "string" ? row.proposal_id : undefined })))}

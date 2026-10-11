@@ -14,6 +14,8 @@ const categoryId = z.string().uuid();
 const projectFields = { projectId: z.string().uuid().optional(), project: z.string().trim().min(1).max(60).optional() };
 const investmentId = z.string().uuid();
 const memberId = z.string().uuid();
+// Older proposals may omit consumption facts; new forms require an explicit choice.
+const consumerFields = { consumerScope: z.enum(["common", "member"]).optional(), consumerMemberId: memberId.optional() };
 const accountKind = z.enum(["bank", "brokerage"]);
 const quantityMilli = z.number().int().positive().max(9_999_999_999_999);
 const tradeQuantity = { quantityMilli: quantityMilli.optional(), quantityMicro: z.number().int().positive().max(9_999_999_999_999).optional(), unitPriceHundredMillionths: z.number().int().positive().max(9_999_999_999_999).optional() };
@@ -24,9 +26,9 @@ const positiveRate = z.string().trim().regex(/^(?:0|[1-9]\d{0,8})(?:\.\d{1,10})?
 
 export const proposalSchema = z.discriminatedUnion("type", [
   z.object({ ...common, type: z.literal("deposit"), amountMinor: positiveMoney, payerMemberId: memberId, accountKind: accountKind.optional() }).strict(),
-  z.object({ ...common, ...projectFields, type: z.literal("expense"), amountMinor: positiveMoney, category, categoryId, accountKind: accountKind.optional() }).strict(),
+  z.object({ ...common, ...projectFields, ...consumerFields, type: z.literal("expense"), amountMinor: positiveMoney, category, categoryId, accountKind: accountKind.optional() }).strict(),
   z.object({ ...common, ...projectFields, type: z.literal("expense_refund"), amountMinor: positiveMoney, category: category.optional(), categoryId: categoryId.optional(), accountKind: accountKind.optional() }).strict(),
-  z.object({ ...common, ...projectFields, type: z.literal("reimbursement"), amountMinor: positiveMoney, category, categoryId, payerMemberId: memberId }).strict(),
+  z.object({ ...common, ...projectFields, ...consumerFields, type: z.literal("reimbursement"), amountMinor: positiveMoney, category, categoryId, payerMemberId: memberId }).strict(),
   z.object({ ...common, type: z.literal("account_transfer"), amountMinor: positiveMoney, sourceAccountKind: accountKind, destinationAccountKind: accountKind }).strict(),
   z.object({ ...common, type: z.literal("currency_exchange"), amountMinor: positiveMoney, sourceAccountKind: accountKind, destinationAccountKind: accountKind, destinationAmountMinor: positiveMoney, destinationCurrency: currency }).strict(),
   z.object({ ...common, type: z.literal("fx_rate_update"), amountMinor: z.literal(0), currency: z.literal("USD"), effectiveAt: z.string().datetime({ offset: true }), usdToCny: positiveRate, usdToHkd: positiveRate, sourceNote: z.string().trim().min(1).max(240) }).strict(),
@@ -36,6 +38,9 @@ export const proposalSchema = z.discriminatedUnion("type", [
   z.object({ ...common, type: z.literal("investment_valuation"), amountMinor: z.literal(0), investmentId, unitValueTenThousandths: z.number().int().nonnegative().max(999_999_999_999).optional(), valuationMode: z.enum(["total_market", "unit_price"]).optional(), totalValueMinor: z.number().int().nonnegative().max(9_999_999_999).optional(), unitValueHundredMillionths: z.number().int().nonnegative().max(9_999_999_999_999).optional(), basis: basis.optional() }).strict(),
 ]).superRefine((value, context) => {
   const issue = (message: string) => context.addIssue({ code: z.ZodIssueCode.custom, message });
+  if (value.type === "expense" || value.type === "reimbursement") {
+    if ((value.consumerScope === "member") !== Boolean(value.consumerMemberId)) issue("个人消费须指定消费人；共同消费不指定个人");
+  }
   if (value.type === "investment_buy" || value.type === "investment_sell") {
     if ((value.quantityMicro == null) === (value.quantityMilli == null)) issue("必须提供一个份额字段");
     if (value.unitPriceHundredMillionths != null && value.unitPriceTenThousandths != null) issue("参考单价不能重复");

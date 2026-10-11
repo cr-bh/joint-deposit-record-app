@@ -15,6 +15,8 @@ const ledgerRow = z.object({
   member_id: z.string().uuid().nullish(),
   submitter_id: z.string().uuid().nullish(),
   payer_member_id: z.string().uuid().nullish(),
+  consumer_scope: z.enum(["common", "member"]).nullish(),
+  consumer_member_id: z.string().uuid().nullish(),
   payee_member_id: z.string().uuid().nullish(),
   account_kind: z.enum(["bank", "brokerage"]).nullish(),
   fx_snapshot_id: z.string().uuid().nullish(),
@@ -46,6 +48,8 @@ export function ledgerEventFromRow(input: unknown): LedgerEvent {
     // Legacy member_id records the submitter, not verified payer/payee facts.
     submitterId: row.submitter_id ?? row.member_id ?? undefined,
     payerMemberId: row.payer_member_id ?? undefined,
+    consumerScope: row.consumer_scope ?? undefined,
+    consumerMemberId: row.consumer_member_id ?? undefined,
     payeeMemberId: row.payee_member_id ?? undefined,
     accountKind: row.account_kind ?? undefined,
     fxSnapshotId: row.fx_snapshot_id ?? undefined,
