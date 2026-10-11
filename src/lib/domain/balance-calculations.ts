@@ -44,7 +44,7 @@ export function holdingMilli(events: LedgerEvent[], investmentId: string, openin
   return calculateInvestmentPosition(events, investmentId, openingQuantityMilli, 0).quantityMilli;
 }
 
-export const eventLabel = (type: LedgerEventType) => ({ opening_balance: "期初余额", deposit: "共同存入", expense: "共同账户消费", expense_refund: "共同消费退款", reimbursement: "成员代付共同消费", settlement: "报销付款", investment_buy: "投资买入", investment_sell: "投资卖出", dividend: "投资分红", member_return: "成员退款返还" })[type];
+export const eventLabel = (type: LedgerEventType) => ({ opening_balance: "期初余额", deposit: "共同存入", expense: "共同账户消费", expense_refund: "消费退款", reimbursement: "成员代付消费", settlement: "报销付款", investment_buy: "投资买入", investment_sell: "投资卖出", dividend: "投资分红", member_return: "成员退款返还" })[type];
 export function sumByCategory(events: LedgerEvent[], reporting: Currency, rates: FxRates, prefix?: string) { return postedEvents(events).reduce<Record<string, number>>((result, event) => { if (!(["expense", "reimbursement", "expense_refund"].includes(event.type)) || (prefix && !event.occurredAt.startsWith(prefix))) return result; const key = event.category || "其他"; result[key] = (result[key] || 0) + (event.type === "expense_refund" ? -1 : 1) * toReportingMinor(event.amountMinor, event.currency, reporting, rates); return result; }, {}); }
 
 export type ReportingTotal = { amountMinor: number | null; missingCurrencies: Currency[] };

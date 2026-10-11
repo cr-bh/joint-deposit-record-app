@@ -51,7 +51,7 @@ export function reimbursementClaimFromRows(input: unknown, source: LedgerEvent, 
   const reserved = safeInteger(reservedMinor, "预留金额");
   if (reserved < 0 || reserved > remainingMinor) throw new Error("代付预留额度无效");
   const state: ClaimState = voided ? "voided" : recovery>0 ? "recovery_due" : effective===0 ? "fully_refunded" : settled >= effective ? "settled" : settled > 0 ? "partially_paid" : "confirmed_unpaid";
-  return { id: claim.id, sourceEntryId: source.id, claimantId: claim.claimant_id, currency: claim.currency, originalMinor: claim.claimed_minor, settledMinor: settled, remainingMinor, reservedMinor: reserved, availableMinor: remainingMinor - reserved, version: claim.version, refundedMemberMinor:refunded,effectiveMinor:effective,returnedMinor:returned,recoveryMinor:voided?0:recovery,returnReservedMinor:returnReserved,returnAvailableMinor:voided?0:recovery-returnReserved,financialHistory:facts.history, state, title: source.title ?? "成员代付共同消费", category: source.category, project: source.project, occurredAt: source.occurredAt };
+  return { id: claim.id, sourceEntryId: source.id, claimantId: claim.claimant_id, currency: claim.currency, originalMinor: claim.claimed_minor, settledMinor: settled, remainingMinor, reservedMinor: reserved, availableMinor: remainingMinor - reserved, version: claim.version, refundedMemberMinor:refunded,effectiveMinor:effective,returnedMinor:returned,recoveryMinor:voided?0:recovery,returnReservedMinor:returnReserved,returnAvailableMinor:voided?0:recovery-returnReserved,financialHistory:facts.history, state, title: source.title ?? "成员代付消费", category: source.category, project: source.project, occurredAt: source.occurredAt };
 }
 
 export const claimStateLabel: Record<ClaimState,string> = {
