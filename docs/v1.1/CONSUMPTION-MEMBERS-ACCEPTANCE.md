@@ -12,3 +12,5 @@
 自动证据：`tests/consumption-members.test.ts`覆盖筛选、严格载荷、适配、金额不变、退款统计、表单与分页；`scripts/test-consumption-members.mjs`覆盖真实PG提交/审批、双连接并发、退款继承、权限、独立替代审批、归档快照及历史升级。
 
 增量迁移先于应用发布，兼容旧客户端和待审批提案。原用户资金数据未写入验收交易。
+
+发布：代码3059848、Vercel F2NYZnfdTRtX3PCPsyDiaUHzarz4为Ready。数据库第20份迁移已安装，原流水内容校验一致；线上新增字段连接、历史筛选及双方选项已只读验证，未提交验收资金。
